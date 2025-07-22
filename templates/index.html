@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cold Call Tracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#cc0000">
+  <style>
+    .month-toggle {
+      background: #cc0000;
+      color: white;
+      padding: 12px 20px;
+      margin: 10px 0;
+      border: none;
+      font-size: 18px;
+      font-weight: bold;
+      width: 100%;
+      text-align: left;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .month-toggle:hover {
+      background: #a00000;
+    }
+
+    .month-section {
+      display: none;
+      margin-bottom: 20px;
+    }
+
+    .call-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    .call-table th,
+    .call-table td {
+      padding: 10px;
+      border: 1px solid #555;
+      text-align: center;
+    }
+
+    .call-table th {
+      background: #111;
+    }
+
+    .reminder-card {
+      background: #111;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      border-left: 6px solid #cc0000;
+    }
+
+    .reminder-card h3 {
+      margin-top: 0;
+      font-size: 18px;
+      color: #ffcc00;
+    }
+
+    .modal-bg {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+    }
+
+    .modal-content {
+      background: #1a1a1a;
+      padding: 30px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 700px;
+      position: relative;
+    }
+
+    .close-modal {
+      position: absolute;
+      top: 10px;
+      right: 14px;
+      font-size: 24px;
+      color: #fff;
+      cursor: pointer;
+    }
+  </style>
+  <script>
+    function toggleMonth(id) {
+      const section = document.getElementById(id);
+      section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function openModal() {
+      document.getElementById("callModal").style.display = "flex";
+    }
+
+    function closeModal() {
+      document.getElementById("callModal").style.display = "none";
+    }
+  </script>
+</head>
+<body>
+  <div class="top-header">
+    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img">
+    <h1>Welcome, {{ user }}</h1>
+    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img">
+  </div>
+
+  <div class="main-layout">
+    <div class="sidebar">
+      <h2>Menu</h2>
+      <a href="/schedule" class="btn">📅 Schedule</a><br>
+      <button class="btn" onclick="openModal()">📞 Log New Call</button><br>
+      <a href="/logout" class="btn btn-logout">Logout</a>
+    </div>
+
+    <div class="content">
+      <!-- Reminder Cards Section -->
+      <div class="card">
+        <h2>Reminders</h2>
+        {% for reminder in reminders %}
+          <div class="reminder-card">
+            <h3>{{ reminder['company'] }}</h3>
+            <p>Last contacted: {{ reminder['days_ago'] }} days ago</p>
+            <p>Suggested Action: <strong>{{ reminder['action'] }}</strong></p>
+          </div>
+        {% else %}
+          <p>No follow-ups due today.</p>
+        {% endfor %}
+      </div>
+
+      <!-- Past Cold Calls Table -->
+      <div class="card">
+        <h2>Past Cold Calls</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Contact Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Address</th>
+              <th>Notes</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for month, calls in calls_by_month.items() %}
+              <tr class="month-header" onclick="toggleMonth('{{ month }}')">
+                <td colspan="7" style="text-align: left; font-weight: bold; background: #222; cursor: pointer;">
+                  {{ month }}
+                </td>
+              </tr>
+              {% for call in calls %}
+                <tr class="call-row month-{{ month }}" style="display: none;">
+                  <td>{{ call['company'] }}</td>
+                  <td>{{ call['contact_name'] or '—' }}</td>
+                  <td>{{ call['email'] or '—' }}</td>
+                  <td>{{ call['phone'] or '—' }}</td>
+                  <td>{{ call['address'] or '—' }}</td>
+                  <td>{{ call['notes'] or '—' }}</td>
+                  <td>
+                    <a href="/edit_call/{{ call['id'] }}" class="btn btn-alt">Edit</a>
+                    <a href="/delete_call/{{ call['id'] }}" class="btn btn-alt" onclick="return confirm('Are you sure?')">Delete</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden Modal for Logging New Call -->
+  <div class="modal-bg" id="callModal">
+    <div class="modal-content">
+      <span class="close-modal" onclick="closeModal()">×</span>
+      <h2>Log a New Cold Call</h2>
+      <form action="/add" method="POST" class="grid-form">
+        <div class="form-group">
+          <label>Company</label>
+          <input type="text" name="company" required>
+        </div>
+        <div class="form-group">
+          <label>Contact Name</label>
+          <input type="text" name="contact_name">
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" name="phone">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email">
+        </div>
+        <div class="form-group full">
+          <label>Address</label>
+          <input type="text" name="address">
+        </div>
+        <div class="form-group full">
+          <label>Notes</label>
+          <textarea name="notes" rows="3"></textarea>
+        </div>
+        <div class="form-group full">
+          <button type="submit" class="btn">Add Call</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/sw.js')
+      .then(reg => console.log('✅ Service Worker Registered'))
+      .catch(err => console.error('❌ Service Worker Error:', err));
+  }
+</script>
+</body>
+</html>

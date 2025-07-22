@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ user }}'s Calendar</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#cc0000">
+  <style>
+    :root { font-size: 18px; }
+
+    body {
+      background: #000;
+      color: #f0f0f0;
+      font-family: "Times New Roman", Times, serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 30px;
+      background: #000;
+    }
+
+    .logo-img { height: 60px; }
+
+    .button-bar {
+      margin: 20px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .calendar-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 30px;
+      padding: 0 30px;
+    }
+
+    .calendar-panel, .day-breakdown-panel {
+      flex: 2;
+    }
+
+    .suggestion-panel {
+      flex: 1;
+      background: #1a1a1a;
+      padding: 20px;
+      border-radius: 8px;
+      border: 2px solid #cc0000;
+    }
+
+    .suggestion-panel h3 { color: #ff3333; }
+
+    h1 { text-align: center; margin: 20px 0; }
+
+    .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: #222; border: 1px solid #444; }
+    .day {
+      background: #1a1a1a; padding: 14px; min-height: 100px;
+      position: relative; border-radius: 8px; cursor: pointer;
+    }
+
+    .day.today { border: 2px solid #ff3333; }
+    .date { font-weight: bold; color: #ff5555; margin-bottom: 5px; }
+
+    .event {
+      background: #cc0000; color: white; padding: 4px 6px; margin-top: 4px;
+      border-radius: 4px; font-size: 0.85rem; overflow: hidden;
+    }
+
+    .weekdays {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      background: #111; text-align: center; padding: 10px 0;
+      border-bottom: 2px solid #444; font-weight: bold;
+    }
+
+    .calendar-nav {
+      display: flex; justify-content: space-between;
+      align-items: center; margin: 20px 0;
+    }
+
+    .calendar-nav a {
+      padding: 10px 20px; background: #444; color: #fff;
+      text-decoration: none; border-radius: 6px;
+    }
+
+    .calendar-nav a:hover { background: #cc0000; }
+
+    .legend {
+      margin-top: 20px; display: flex; gap: 15px; font-size: 0.9rem;
+    }
+
+    .legend span {
+      width: 14px; height: 14px; display: inline-block; border-radius: 4px;
+    }
+
+    .legend .call { background: #cc0000; }
+    .legend .visit { background: #0077cc; }
+    .legend .demo { background: #ffaa00; }
+
+    .btn {
+      background: #cc0000; border: none; color: #fff;
+      padding: 10px 16px; border-radius: 6px; cursor: pointer;
+      text-decoration: none;
+    }
+
+    .btn:hover { background: #a00000; }
+
+    .hour-block {
+      background: #1a1a1a; border: 1px solid #333;
+      padding: 10px; margin-bottom: 6px; border-radius: 6px;
+    }
+
+    .hour-label {
+      font-weight: bold; color: #ff3333;
+    }
+
+    #dayBreakdownContainer { display: none; }
+
+    @media (max-width: 768px) {
+      .calendar-container { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img">
+    <h1>{{ user }}'s Schedule</h1>
+    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img">
+  </div>
+
+  <div class="button-bar">
+    <a href="/" class="btn">🏠 Dashboard</a>
+    <button class="btn" onclick="document.getElementById('eventModal').style.display='flex'">➕ Add Event</button>
+  </div>
+
+  <div class="calendar-container">
+    <!-- Calendar View -->
+    <div class="calendar-panel" id="calendarPanel">
+      <div class="calendar-nav">
+        {% set prev_month = month - 1 if month > 1 else 12 %}
+        {% set prev_year = year - 1 if month == 1 else year %}
+        {% set next_month = month + 1 if month < 12 else 1 %}
+        {% set next_year = year + 1 if month == 12 else year %}
+        <a href="{{ url_for('schedule') }}?year={{ prev_year }}&month={{ prev_month }}">← {{ (date(year, month, 1) - timedelta(days=1)).strftime('%B') }}</a>
+        <h2>{{ today.replace(year=year, month=month, day=1).strftime('%B %Y') }}</h2>
+        <a href="{{ url_for('schedule') }}?year={{ next_year }}&month={{ next_month }}">{{ (date(year, month, 28) + timedelta(days=4)).replace(day=1).strftime('%B') }} →</a>
+      </div>
+
+      <div class="weekdays">
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+      </div>
+
+      <div class="calendar">
+        {% set first_weekday = date(year, month, 1).weekday() %}
+        {% set offset = (first_weekday + 1) % 7 %}
+        {% for _ in range(offset) %}<div class="day"></div>{% endfor %}
+
+        {% for day in range(1, total_days + 1) %}
+          {% set current_date = date(year, month, day) %}
+          {% set date_str = current_date.strftime('%Y-%m-%d') %}
+          <div class="day {% if current_date == today %}today{% endif %}" onclick="showDayBreakdown('{{ date_str }}')">
+            <div class="date">{{ day }}</div>
+            {% if event_map.get(date_str) %}
+              {% for e in event_map[date_str] %}
+                <div class="event" data-type="{{ e.get('type', 'call') }}" data-description="{{ e.description or '' }}">
+                  {{ e.title }}{% if e.time %} @ {{ e.time }}{% endif %}
+                </div>
+              {% endfor %}
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="legend">
+        <div><span class="call"></span> Sales Call</div>
+        <div><span class="visit"></span> Customer Visit</div>
+        <div><span class="demo"></span> Site Demo</div>
+      </div>
+    </div>
+
+    <!-- Suggestions Panel -->
+    <div class="suggestion-panel">
+      <h3>Suggestions for What to Schedule Next</h3>
+      <ul>
+        <li>Customer Visit</li>
+        <li>Site Demo</li>
+        <li>Sales Call</li>
+      </ul>
+    </div>
+
+    <!-- Day Breakdown Panel -->
+    <div class="day-breakdown-panel" id="dayBreakdownContainer">
+      <h2 id="dayBreakdownTitle"></h2>
+      <div id="hourlySlots"></div>
+      <button class="btn" onclick="returnToCalendar()">← Back to Calendar</button>
+    </div>
+  </div>
+
+  <!-- Add Event Modal -->
+  <div class="modal" id="eventModal" style="display:none;">
+    <div class="modal-content">
+      <span class="close" onclick="document.getElementById('eventModal').style.display='none'">&times;</span>
+      <h2>Add New Event</h2>
+      <form method="POST" action="/schedule" class="event-form">
+        <label>Title</label>
+        <input type="text" name="title" required>
+        <label>Description</label>
+        <input type="text" name="description">
+        <label>Date</label>
+        <input type="date" name="date" required>
+        <label>Time</label>
+        <input type="time" name="time">
+        <label>Type</label>
+        <select name="type" required>
+          <option value="call">Sales Call</option>
+          <option value="visit">Customer Visit</option>
+          <option value="demo">Site Demo</option>
+        </select>
+        <button type="submit" class="btn">Save</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const events = {{ event_map | tojson }};
+
+    function showDayBreakdown(date) {
+      document.getElementById("calendarPanel").style.display = "none";
+      document.getElementById("dayBreakdownContainer").style.display = "block";
+
+      const breakdownTitle = document.getElementById("dayBreakdownTitle");
+      const slotContainer = document.getElementById("hourlySlots");
+      const formattedDate = new Date(date).toDateString();
+      breakdownTitle.textContent = "Schedule for " + formattedDate;
+
+      const hours = [];
+      for (let i = 7; i <= 18; i++) {
+        let hour = i % 12 || 12;
+        let ampm = i < 12 ? 'AM' : 'PM';
+        hours.push(`${hour}:00 ${ampm}`);
+      }
+
+      const eventsOnDate = events[date] || [];
+      slotContainer.innerHTML = hours.map(h => {
+        const match = eventsOnDate.find(e => e.time === h.replace(':00', '').padStart(5, '0'));
+        return `<div class="hour-block">
+                  <div class="hour-label">${h}</div>
+                  ${match ? `<div class="event">${match.title} - ${match.description || ''}</div>` : `<div class="empty">No event</div>`}
+                </div>`;
+      }).join('');
+    }
+
+    function returnToCalendar() {
+      document.getElementById("calendarPanel").style.display = "block";
+      document.getElementById("dayBreakdownContainer").style.display = "none";
+    }
+  </script>
+
+  <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/sw.js')
+      .then(reg => console.log('✅ Service Worker Registered'))
+      .catch(err => console.error('❌ Service Worker Error:', err));
+  }
+</script>
+</body>
+</html>
