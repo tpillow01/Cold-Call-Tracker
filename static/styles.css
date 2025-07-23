@@ -6,6 +6,7 @@ body {
   font-family: "Segoe UI", sans-serif;
 }
 
+/* Top Header */
 .top-header {
   background: #660000;
   color: #fff;
@@ -13,13 +14,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  position: relative;
+  flex-wrap: wrap;
 }
 
 .top-header h1 {
   font-size: 28px;
   text-align: center;
   flex-grow: 1;
+  margin: 10px 0;
 }
 
 .logo-img {
@@ -32,6 +34,7 @@ body {
   transform: scale(1.05);
 }
 
+/* Layout */
 .main-layout {
   display: flex;
   flex-wrap: wrap;
@@ -40,6 +43,7 @@ body {
   justify-content: center;
 }
 
+/* Sidebar */
 .sidebar {
   background: #111;
   padding: 30px;
@@ -47,24 +51,29 @@ body {
   width: 250px;
   text-align: center;
   box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .sidebar h2 {
   font-size: 22px;
-  margin-bottom: 30px;
+  margin-bottom: 10px;
 }
 
-.sidebar .btn {
+/* Buttons */
+.btn {
   display: inline-block;
   background: #cc0000;
   color: #fff;
-  padding: 14px 24px;
+  padding: 16px 24px;
   border: none;
   border-radius: 8px;
   text-decoration: none;
   font-size: 16px;
   cursor: pointer;
-  margin-bottom: 15px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .btn:hover {
@@ -73,19 +82,20 @@ body {
 
 .btn-logout {
   background: #333;
-  margin-top: 10px;
 }
 
 .btn-logout:hover {
   background: #444;
 }
 
+/* Content Area */
 .content {
   flex: 1;
   min-width: 500px;
   max-width: 1000px;
 }
 
+/* Card Containers */
 .card {
   background: #1a1a1a;
   border-radius: 12px;
@@ -102,6 +112,22 @@ body {
   padding-bottom: 10px;
 }
 
+/* Reminder Cards */
+.reminder-card {
+  background: #111;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  border-left: 6px solid #cc0000;
+}
+
+.reminder-card h3 {
+  margin-top: 0;
+  font-size: 18px;
+  color: #ffcc00;
+}
+
+/* Form Layout */
 .grid-form {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -119,18 +145,21 @@ body {
 }
 
 .form-group input,
-.form-group textarea {
-  padding: 10px;
+.form-group textarea,
+.form-group select {
+  padding: 12px;
   background: #222;
   border: 1px solid #555;
   border-radius: 6px;
   color: #fff;
+  font-size: 16px;
 }
 
 .form-group.full {
   grid-column: span 2;
 }
 
+/* Tables */
 table {
   width: 100%;
   border-collapse: collapse;
@@ -149,6 +178,7 @@ th {
   font-weight: bold;
 }
 
+/* Status Badges */
 .status-badge {
   display: inline-block;
   padding: 6px 10px;
@@ -170,6 +200,73 @@ th {
   background: #cc0000;
 }
 
+/* Enhanced Modal for Add Event - Match Log Cold Call Design */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.85);
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal .modal-content {
+  background-color: #1a1a1a;
+  padding: 30px;
+  border-radius: 14px;
+  max-width: 700px;
+  width: 95%;
+  box-shadow: 0 0 0 2px #cc0000;
+  position: relative;
+}
+
+.modal-content h2 {
+  font-size: 24px;
+  margin-top: 0;
+  color: #fff;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.modal-content label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: bold;
+  color: #fff;
+}
+
+.modal-content input,
+.modal-content select {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 18px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background-color: #222;
+  color: #fff;
+  font-size: 16px;
+}
+
+.modal-content .btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  margin-top: 10px;
+}
+
+.modal-content .close {
+  position: absolute;
+  top: 14px;
+  right: 20px;
+  font-size: 28px;
+  color: #fff;
+  cursor: pointer;
+}
+
+/* Calendar Layout */
 .calendar-container {
   display: flex;
   flex-wrap: wrap;
@@ -211,11 +308,7 @@ th {
   font-size: 16px;
 }
 
-#dayModal .day-modal-content {
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
+/* Hourly View */
 .hour-block {
   padding: 10px;
   border-bottom: 1px solid #333;
@@ -238,52 +331,45 @@ th {
   flex: 1;
 }
 
-/* Add Event Form (NEW) */
-.add-event-container {
-  display: flex;
-  justify-content: center;
-  margin: 40px auto;
-  width: 100%;
-}
-
-.add-event-form {
-  background: #1a1a1a;
-  padding: 40px;
-  border-radius: 12px;
-  max-width: 700px;
-  width: 100%;
-  box-shadow: 0 0 10px rgba(255, 0, 0, 0.4);
-}
-
-.add-event-form h2 {
-  font-size: 26px;
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.add-event-form .form-group {
-  margin-bottom: 20px;
-}
-
-.add-event-form label {
-  display: block;
-  font-weight: bold;
-  margin-bottom: 6px;
-}
-
-.add-event-form input,
-.add-event-form select,
-.add-event-form textarea {
-  width: 100%;
-  padding: 14px;
-  background: #222;
-  color: #fff;
-  border: 1px solid #555;
-  border-radius: 8px;
-  font-size: 16px;
-}
-
+/* Responsive Design */
 @media (max-width: 768px) {
+  .top-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .logo-img {
+    height: 60px;
+  }
+
+  .top-header h1 {
+    font-size: 22px;
+    margin-top: 10px;
+  }
+
+  .main-layout {
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .sidebar {
+    width: 100%;
+    align-items: center;
+  }
+
+  .content {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .grid-form {
+    grid-template-columns: 1fr;
+  }
+
+  .form-group.full {
+    grid-column: span 1;
+  }
+
   .calendar-container {
     flex-direction: column;
   }
@@ -302,8 +388,7 @@ th {
   .hour-block strong {
     width: auto;
   }
-
-  .top-header {
+ .top-header {
     flex-direction: column;
     gap: 10px;
   }

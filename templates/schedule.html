@@ -200,30 +200,30 @@
     </div>
   </div>
 
-  <!-- Add Event Modal -->
-  <div class="modal" id="eventModal" style="display:none;">
-    <div class="modal-content">
-      <span class="close" onclick="document.getElementById('eventModal').style.display='none'">&times;</span>
-      <h2>Add New Event</h2>
-      <form method="POST" action="/schedule" class="event-form">
-        <label>Title</label>
-        <input type="text" name="title" required>
-        <label>Description</label>
-        <input type="text" name="description">
-        <label>Date</label>
-        <input type="date" name="date" required>
-        <label>Time</label>
-        <input type="time" name="time">
-        <label>Type</label>
-        <select name="type" required>
-          <option value="call">Sales Call</option>
-          <option value="visit">Customer Visit</option>
-          <option value="demo">Site Demo</option>
-        </select>
-        <button type="submit" class="btn">Save</button>
-      </form>
-    </div>
+<!-- Add Event Modal -->
+<div class="modal" id="eventModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
+  <div style="background:#1a1a1a; padding:40px; border-radius:10px; border:2px solid #cc0000; width:90%; max-width:600px; box-shadow:0 0 10px #cc0000; position:relative;">
+    <span onclick="document.getElementById('eventModal').style.display='none'" style="position:absolute; top:10px; right:20px; font-size:28px; color:#fff; cursor:pointer;">&times;</span>
+    <h2 style="color:#ff3333; margin-bottom:20px;">Add New Event</h2>
+    <form method="POST" action="/schedule" style="display:flex; flex-direction:column; gap:15px;">
+      <label>Title</label>
+      <input type="text" name="title" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
+      <label>Description</label>
+      <input type="text" name="description" style="padding:10px; font-size:16px; border-radius:6px; border:none;">
+      <label>Date</label>
+      <input type="date" name="date" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
+      <label>Time</label>
+      <input type="time" name="time" style="padding:10px; font-size:16px; border-radius:6px; border:none;">
+      <label>Type</label>
+      <select name="type" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
+        <option value="call">Sales Call</option>
+        <option value="visit">Customer Visit</option>
+        <option value="demo">Site Demo</option>
+      </select>
+      <button type="submit" class="btn" style="margin-top:10px;">Save</button>
+    </form>
   </div>
+</div>
 
   <script>
     const events = {{ event_map | tojson }};
