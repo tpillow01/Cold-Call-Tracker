@@ -402,3 +402,41 @@ th {
     margin-top: 10px;
   }
 }
+/* Prevent mobile zoom on inputs */
+input, textarea, select, button {
+  font-size: 16px !important; /* Prevent iOS zoom on focus */
+}
+
+/* Prevent body from resizing when keyboard opens */
+body {
+  scroll-padding-bottom: 300px;
+  overscroll-behavior: contain;
+}
+
+/* Ensure modals stay in view on mobile */
+.modal-content {
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* For better mobile layout during typing */
+@media (max-width: 600px) {
+  .modal-content {
+    margin: auto;
+    padding: 20px;
+    width: 95%;
+    height: auto;
+  }
+
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    font-size: 18px;
+    width: 100%;
+  }
+
+  .modal-bg {
+    align-items: flex-start;
+    padding-top: 20px;
+  }
+}
