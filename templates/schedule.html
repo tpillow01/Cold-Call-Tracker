@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#cc0000">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" id="viewportMeta">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" id="viewportMeta">
   <style>
     :root { font-size: 18px; }
 
@@ -124,6 +124,26 @@
     @media (max-width: 768px) {
       .calendar-container { flex-direction: column; }
     }
+
+    @media (max-width: 600px) {
+      #eventModal > div {
+        width: 100vw !important;
+        height: 100vh;
+        max-width: none;
+        border-radius: 0;
+        padding: 20px;
+        overflow-y: auto;
+      }
+
+      input, textarea, select {
+        font-size: 18px !important;
+      }
+
+      body {
+        overscroll-behavior: contain;
+        touch-action: manipulation;
+      }
+    }
   </style>
 </head>
 <body>
@@ -227,7 +247,7 @@
 </div>
 
 <script>
-  const events = {{ event_map | tojson }};
+  const events = {{ event_map | tojson | safe }};
 
   function showDayBreakdown(date) {
     document.getElementById("calendarPanel").style.display = "none";

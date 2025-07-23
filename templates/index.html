@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#cc0000">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" id="viewportMeta">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <style>
     .month-toggle {
       background: #cc0000;
@@ -90,6 +90,26 @@
       color: #fff;
       cursor: pointer;
     }
+
+    @media (max-width: 600px) {
+      .modal-content {
+        width: 100vw !important;
+        height: 100vh;
+        max-width: none;
+        border-radius: 0;
+        padding: 20px;
+        overflow-y: auto;
+      }
+
+      input, textarea, select {
+        font-size: 18px !important;
+      }
+
+      body {
+        overscroll-behavior: contain;
+        touch-action: manipulation;
+      }
+    }
   </style>
   <script>
     function toggleMonth(id) {
@@ -97,27 +117,11 @@
       section.style.display = section.style.display === 'none' ? 'block' : 'none';
     }
 
-    function enableZoom() {
-      const meta = document.getElementById('viewportMeta');
-      if (meta) {
-        meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes');
-      }
-    }
-
-    function disableZoom() {
-      const meta = document.getElementById('viewportMeta');
-      if (meta) {
-        meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
-      }
-    }
-
     function openModal() {
-      enableZoom();
       document.getElementById("callModal").style.display = "flex";
     }
 
     function closeModal() {
-      disableZoom();
       document.getElementById("callModal").style.display = "none";
     }
   </script>
