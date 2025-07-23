@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#cc0000">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" id="viewportMeta">
   <style>
     :root { font-size: 18px; }
 
@@ -135,7 +135,7 @@
 
   <div class="button-bar">
     <a href="/" class="btn">🏠 Dashboard</a>
-    <button class="btn" onclick="document.getElementById('eventModal').style.display='flex'">➕ Add Event</button>
+    <button class="btn" onclick="enableZoom(); document.getElementById('eventModal').style.display='flex'">➕ Add Event</button>
   </div>
 
   <div class="calendar-container">
@@ -163,7 +163,7 @@
         {% for day in range(1, total_days + 1) %}
           {% set current_date = date(year, month, day) %}
           {% set date_str = current_date.strftime('%Y-%m-%d') %}
-          <div class="day {% if current_date == today %}today{% endif %}" onclick="showDayBreakdown('{{ date_str }}')">
+          <div class="day {% if current_date == today %}today{% endif %}" onclick="enableZoom(); showDayBreakdown('{{ date_str }}')">
             <div class="date">{{ day }}</div>
             {% if event_map.get(date_str) %}
               {% for e in event_map[date_str] %}
@@ -197,14 +197,14 @@
     <div class="day-breakdown-panel" id="dayBreakdownContainer">
       <h2 id="dayBreakdownTitle"></h2>
       <div id="hourlySlots"></div>
-      <button class="btn" onclick="returnToCalendar()">← Back to Calendar</button>
+      <button class="btn" onclick="disableZoom(); returnToCalendar()">← Back to Calendar</button>
     </div>
   </div>
 
 <!-- Add Event Modal -->
 <div class="modal" id="eventModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
   <div style="background:#1a1a1a; padding:40px; border-radius:10px; border:2px solid #cc0000; width:90%; max-width:600px; box-shadow:0 0 10px #cc0000; position:relative;">
-    <span onclick="document.getElementById('eventModal').style.display='none'" style="position:absolute; top:10px; right:20px; font-size:28px; color:#fff; cursor:pointer;">&times;</span>
+    <span onclick="disableZoom(); document.getElementById('eventModal').style.display='none'" style="position:absolute; top:10px; right:20px; font-size:28px; color:#fff; cursor:pointer;">&times;</span>
     <h2 style="color:#ff3333; margin-bottom:20px;">Add New Event</h2>
     <form method="POST" action="/schedule" style="display:flex; flex-direction:column; gap:15px;">
       <label>Title</label>
@@ -226,47 +226,64 @@
   </div>
 </div>
 
-  <script>
-    const events = {{ event_map | tojson }};
+<script>
+  const events = {{ event_map | tojson }};
 
-    function showDayBreakdown(date) {
-      document.getElementById("calendarPanel").style.display = "none";
-      document.getElementById("dayBreakdownContainer").style.display = "block";
+  function showDayBreakdown(date) {
+    document.getElementById("calendarPanel").style.display = "none";
+    document.getElementById("dayBreakdownContainer").style.display = "block";
 
-      const breakdownTitle = document.getElementById("dayBreakdownTitle");
-      const slotContainer = document.getElementById("hourlySlots");
-      const formattedDate = new Date(date).toDateString();
-      breakdownTitle.textContent = "Schedule for " + formattedDate;
+    const breakdownTitle = document.getElementById("dayBreakdownTitle");
+    const slotContainer = document.getElementById("hourlySlots");
+    const formattedDate = new Date(date).toDateString();
+    breakdownTitle.textContent = "Schedule for " + formattedDate;
 
-      const hours = [];
-      for (let i = 7; i <= 18; i++) {
-        let hour = i % 12 || 12;
-        let ampm = i < 12 ? 'AM' : 'PM';
-        hours.push(`${hour}:00 ${ampm}`);
-      }
-
-      const eventsOnDate = events[date] || [];
-      slotContainer.innerHTML = hours.map(h => {
-        const match = eventsOnDate.find(e => e.time === h.replace(':00', '').padStart(5, '0'));
-        return `<div class="hour-block">
-                  <div class="hour-label">${h}</div>
-                  ${match ? `<div class="event">${match.title} - ${match.description || ''}</div>` : `<div class="empty">No event</div>`}
-                </div>`;
-      }).join('');
+    const hours = [];
+    for (let i = 7; i <= 18; i++) {
+      let hour = i % 12 || 12;
+      let ampm = i < 12 ? 'AM' : 'PM';
+      hours.push(`${hour}:00 ${ampm}`);
     }
 
-    function returnToCalendar() {
-      document.getElementById("calendarPanel").style.display = "block";
-      document.getElementById("dayBreakdownContainer").style.display = "none";
-    }
-  </script>
+    const eventsOnDate = events[date] || [];
+    slotContainer.innerHTML = hours.map(h => {
+      const match = eventsOnDate.find(e => e.time === h.replace(':00', '').padStart(5, '0'));
+      return `<div class="hour-block">
+                <div class="hour-label">${h}</div>
+                ${match ? `<div class="event">${match.title} - ${match.description || ''}</div>` : `<div class="empty">No event</div>`}
+              </div>`;
+    }).join('');
+  }
 
-  <script>
+  function returnToCalendar() {
+    document.getElementById("calendarPanel").style.display = "block";
+    document.getElementById("dayBreakdownContainer").style.display = "none";
+  }
+</script>
+
+<script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/static/sw.js')
       .then(reg => console.log('✅ Service Worker Registered'))
       .catch(err => console.error('❌ Service Worker Error:', err));
   }
 </script>
+
+<script>
+  function enableZoom() {
+    const meta = document.getElementById('viewportMeta');
+    if (meta) {
+      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes');
+    }
+  }
+
+  function disableZoom() {
+    const meta = document.getElementById('viewportMeta');
+    if (meta) {
+      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    }
+  }
+</script>
+
 </body>
 </html>
