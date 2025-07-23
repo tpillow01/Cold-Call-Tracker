@@ -78,9 +78,13 @@ def login():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        name = request.form['name']
-        username = request.form['username']
-        password = request.form['password']
+        name = request.form.get('name', '').strip()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if not name or not username or not password:
+            return render_template('signup.html', error='All fields are required.')
+
         hashed = generate_password_hash(password)
         conn = get_db_connection()
         try:
@@ -91,6 +95,7 @@ def signup():
             return render_template('signup.html', error='Username already exists.')
         finally:
             conn.close()
+
     return render_template('signup.html')
 
 # ─── LOGOUT ────────────────────────────────
