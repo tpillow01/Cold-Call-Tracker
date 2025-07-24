@@ -37,7 +37,7 @@
     .call-form-container form {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 20px;
+      gap: 25px;
     }
 
     .call-form-container .form-group {
@@ -52,7 +52,7 @@
 
     .call-form-container input,
     .call-form-container textarea {
-      padding: 12px;
+      padding: 14px;
       background: #222;
       border: 1px solid #555;
       border-radius: 6px;
@@ -64,17 +64,21 @@
       grid-column: span 2;
     }
 
-    .call-form-container .btn {
-      margin-top: 10px;
-      padding: 14px 24px;
-      font-size: 16px;
+    .btn {
+      padding: 12px 20px;
+      font-size: 15px;
+      margin-right: 10px;
+    }
+
+    .btn-small {
+      font-size: 14px;
+      padding: 10px 18px;
     }
 
     @media (max-width: 768px) {
       .call-form-container form {
         grid-template-columns: 1fr;
       }
-
       .call-form-container .form-group.full {
         grid-column: span 1;
       }
@@ -116,19 +120,20 @@
           <label>Notes</label>
           <textarea name="notes" rows="4">{{ call['notes'] or '' }}</textarea>
         </div>
-        <div class="form-group full">
-          <button type="submit" class="btn">Save</button>
+        <div class="form-group full" style="display:flex; justify-content:space-between;">
+          <button type="submit" class="btn btn-small">💾 Save</button>
+          <a href="/delete_call/{{ call['id'] }}" class="btn btn-small" style="background:#cc0000;" onclick="return confirm('Are you sure?')">🗑 Delete</a>
         </div>
       </form>
     </div>
   </div>
 
   <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/static/sw.js')
-      .then(reg => console.log('✅ Service Worker Registered'))
-      .catch(err => console.error('❌ Service Worker Error:', err));
-  }
-</script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(reg => console.log('✅ Service Worker Registered'))
+        .catch(err => console.error('❌ Service Worker Error:', err));
+    }
+  </script>
 </body>
 </html>

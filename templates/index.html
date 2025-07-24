@@ -42,6 +42,7 @@
       padding: 10px;
       border: 1px solid #555;
       text-align: center;
+      vertical-align: top;
     }
 
     .call-table th {
@@ -112,9 +113,12 @@
     }
   </style>
   <script>
-    function toggleMonth(id) {
-      const section = document.getElementById(id);
-      section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    function toggleMonth(month) {
+      const className = `.month-${month.replace(/\s/g, '-')}`;
+      const rows = document.querySelectorAll(className);
+      rows.forEach(row => {
+        row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
+      });
     }
 
     function openModal() {
@@ -159,7 +163,7 @@
       <!-- Past Cold Calls Table -->
       <div class="card">
         <h2>Past Cold Calls</h2>
-        <table>
+        <table class="call-table">
           <thead>
             <tr>
               <th>Company</th>
@@ -179,16 +183,18 @@
                 </td>
               </tr>
               {% for call in calls %}
-                <tr class="call-row month-{{ month }}" style="display: none;">
+                <tr class="call-row month-{{ month.replace(' ', '-') }}" style="display: none;">
                   <td>{{ call['company'] }}</td>
                   <td>{{ call['contact_name'] or '—' }}</td>
                   <td>{{ call['email'] or '—' }}</td>
                   <td>{{ call['phone'] or '—' }}</td>
                   <td>{{ call['address'] or '—' }}</td>
-                  <td>{{ call['notes'] or '—' }}</td>
+                  <td style="white-space: pre-wrap;">{{ call['notes'] or '—' }}</td>
                   <td>
-                    <a href="/edit_call/{{ call['id'] }}" class="btn btn-alt">Edit</a>
-                    <a href="/delete_call/{{ call['id'] }}" class="btn btn-alt" onclick="return confirm('Are you sure?')">Delete</a>
+                    <div style="display: flex; gap: 6px; justify-content: center;">
+                      <a href="/edit_call/{{ call['id'] }}" class="btn btn-alt" style="padding: 6px 10px; font-size: 14px;">Edit</a>
+                      <a href="/delete_call/{{ call['id'] }}" class="btn btn-alt" style="padding: 6px 10px; font-size: 14px;" onclick="return confirm('Are you sure?')">Delete</a>
+                    </div>
                   </td>
                 </tr>
               {% endfor %}

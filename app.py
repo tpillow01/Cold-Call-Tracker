@@ -180,23 +180,24 @@ def delete_call(id):
 def add_call():
     if 'user_id' not in session:
         return redirect('/login')
-    data = (
-        request.form['company'],
-        request.form['contact_name'],
-        request.form['phone'],
-        request.form['email'],
-        request.form['address'],
-        request.form['notes'],
-        session['user_id'],
-        datetime.today().strftime('%Y-%m-%d')
-    )
+
+    rep_id       = session['user_id']
+    company      = request.form.get('company', '').strip()
+    contact_name = request.form.get('contact_name', '').strip()
+    phone        = request.form.get('phone', '').strip()
+    email        = request.form.get('email', '').strip()
+    address      = request.form.get('address', '').strip()
+    notes        = request.form.get('notes', '').strip()
+    date_called  = datetime.today().strftime('%Y-%m-%d')
+
     conn = get_db_connection()
     conn.execute('''
-        INSERT INTO cold_calls (company, contact_name, phone, email, address, notes, rep_id, date_called)
+        INSERT INTO cold_calls (rep_id, company, contact_name, phone, email, address, notes, date_called)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', data)
+    ''', (rep_id, company, contact_name, phone, email, address, notes, date_called))
     conn.commit()
     conn.close()
+
     return redirect('/')
 
 # ─── SCHEDULE ──────────────────────────────
