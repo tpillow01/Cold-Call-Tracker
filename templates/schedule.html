@@ -7,58 +7,10 @@
   <meta name="theme-color" content="#cc0000" />
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
-
-  <!-- page-scoped polish -->
-  <style>
-    .cal-scroll{overflow-x:auto;padding-bottom:6px}
-    .cal-inner{min-width:920px}
-    @media (max-width:900px){.cal-inner{min-width:780px}}
-
-    .weekday-bar{
-      display:grid;grid-template-columns:repeat(7, minmax(0,1fr));gap:1px;background:var(--border);
-      border-bottom:1px solid var(--border)
-    }
-    .weekday{
-      background:linear-gradient(180deg,#171b22,#13171d);
-      padding:10px 8px;text-align:center;color:#e6e8ed;font-weight:800;font-size:.92rem
-    }
-
-    .calendar.panel{padding:0} /* use head + grid only */
-    .calendar .cal-head{
-      display:grid; grid-template-columns:auto 1fr auto; align-items:center;
-      gap:10px; padding:12px 14px; border-bottom:1px solid var(--border);
-      background:linear-gradient(180deg,#14181f,#11151b)
-    }
-    .calendar .cal-head h3{margin:0; text-align:center}
-
-    .calendar-grid{
-      display:grid; gap:1px; background:var(--border);
-      grid-template-columns:repeat(7, minmax(0, 1fr)); /* reinforced */
-    }
-    .day{
-      background:linear-gradient(180deg,#11161c,#0f1419);
-      padding:10px 8px; border:1px solid rgba(255,255,255,.02); border-radius:4px;
-      display:flex; flex-direction:column; gap:6px; transition:background .15s ease
-    }
-    .day:hover{background:#141a22}
-    .day .dnum{
-      position:absolute; top:6px; right:6px; font-weight:900; font-size:.8rem; color:#cfd5dd;
-      padding:2px 8px; border-radius:999px; background:#0e1319; border:1px solid #1f2631
-    }
-    .day.today{outline:2px solid var(--accent); outline-offset:-2px}
-    .day.today .dnum{color:#fff; background:var(--accent); border-color:var(--accent)}
-
-    .event.call{background:rgba(204,0,0,.16);border:1px solid rgba(204,0,0,.28);color:#ffd4d4;border-radius:10px;padding:6px 8px;font-weight:800;font-size:.86rem}
-    .event.visit{background:rgba(31,157,85,.18);border:1px solid rgba(31,157,85,.3);color:#c9f1da;border-radius:10px;padding:6px 8px;font-weight:800;font-size:.86rem}
-    .event.demo{background:rgba(192,142,0,.16);border:1px solid rgba(192,142,0,.3);color:#ffefb5;border-radius:10px;padding:6px 8px;font-weight:800;font-size:.86rem}
-
-    /* modal list spacing */
-    #dayBody .event{margin:6px 0}
-  </style>
 </head>
 <body>
 
-  <!-- Clean header (uses updated styles.css rules) -->
+  <!-- Clean Header -->
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand-wrap">
@@ -95,15 +47,15 @@
       <section class="calendar panel">
         <div class="cal-head">
           <div class="btn-row"><button class="btn" id="prevBtn" type="button">← Prev</button></div>
-          <h3 id="calTitle"></h3>
+          <h3 id="calTitle" class="center"></h3>
           <div class="btn-row">
             <button class="btn" id="todayBtn" type="button">Today</button>
             <button class="btn" id="nextBtn" type="button">Next →</button>
           </div>
         </div>
 
-        <div class="cal-scroll">
-          <div class="cal-inner">
+        <div class="cal-scroll" style="overflow-x:auto;padding-bottom:6px">
+          <div class="cal-inner" style="min-width:920px">
             <div class="weekday-bar">
               <div class="weekday">Sun</div><div class="weekday">Mon</div><div class="weekday">Tue</div>
               <div class="weekday">Wed</div><div class="weekday">Thu</div><div class="weekday">Fri</div><div class="weekday">Sat</div>
@@ -173,25 +125,32 @@
     </div>
   </div>
 
-  <!-- Events JSON -->
+  <!-- Mobile bottom dock -->
+  <nav class="mobile-dock" aria-label="Primary">
+    <a class="dock-btn" href="/">Dashboard</a>
+    <button class="dock-btn primary" type="button" onclick="document.getElementById('newEventModal').classList.add('open')">Add Event</button>
+    <a class="dock-btn" href="/schedule">Schedule</a>
+  </nav>
+
+  <!-- Events JSON for JS -->
   <script id="events-json" type="application/json">
     {{ event_map | tojson }}
   </script>
 
   <script>
-    // ===== Calendar logic (fixed-size cells + "+N more") =====
+    // ===== Calendar logic (stable cells + "+N more") =====
     const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const grid = document.getElementById('calGrid');
     let y = parseInt(grid.dataset.year || new Date().getFullYear(), 10);
     let m = parseInt(grid.dataset.month || (new Date().getMonth()+1), 10); // 1-12
-    const events = JSON.parse(document.getElementById('events-json').textContent || "{}"); // { "YYYY-MM-DD": [ {title,time,notes,type} ] }
+    const events = JSON.parse(document.getElementById('events-json').textContent || "{}");
 
     const titleEl = document.getElementById('calTitle');
     const dayModal = document.getElementById('dayModal');
     const dayBody  = document.getElementById('dayBody');
     const dayTitle = document.getElementById('dayTitle');
 
-    const MAX_CHIPS = 2; // show up to 2 chips in a cell; rest goes to "+N more"
+    const MAX_CHIPS = 3; // show up to 3 chips; rest -> "+N more"
 
     function pad(n){ return String(n).padStart(2,'0'); }
     function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }

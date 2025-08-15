@@ -1,22 +1,26 @@
-# app.py
-from flask import Flask, render_template, request, redirect, session, url_for
+import os
 import sqlite3
 from datetime import datetime, timedelta, date as py_date
 from calendar import monthrange
 from collections import defaultdict
+
+from flask import Flask, render_template, request, redirect, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
-DB = 'calls.db'
 
-# ─── DB CONNECTION ─────────────────────────
+# Use a persistent DB path if provided (Render Disk)
+DB = os.getenv("DB_PATH", os.path.join(os.getcwd(), "calls.db"))
+if os.path.dirname(DB):
+    os.makedirs(os.path.dirname(DB), exist_ok=True)
+
+# ─── DB HELPERS ─────────────────────────
 def get_db_connection():
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
     return conn
 
-# ─── INIT TABLES ───────────────────────────
 def init_db():
     conn = get_db_connection()
     conn.execute('''
@@ -47,21 +51,28 @@ def init_db():
             user_id INTEGER,
             title TEXT NOT NULL,
             description TEXT,
-            date TEXT NOT NULL,   -- ISO yyyy-mm-dd
-            time TEXT,            -- HH:MM (optional)
-            type TEXT,            -- e.g., "call", "visit", "demo"
+            date TEXT NOT NULL,   -- YYYY-MM-DD
+            time TEXT,            -- HH:MM
+            type TEXT,            -- call | visit | demo
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
     conn.commit()
     conn.close()
 
-# ─── LOGIN ─────────────────────────────────
+# Ensure tables exist even when imported by gunicorn
+with app.app_context():
+    try:
+        init_db()
+    except Exception as e:
+        print("init_db note:", e)
+
+# ─── AUTH ───────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        username = (request.form.get('username') or '').strip()
+        password = (request.form.get('password') or '').strip()
         conn = get_db_connection()
         user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         conn.close()
@@ -69,28 +80,21 @@ def login():
             session['user_id'] = user['id']
             session['name'] = user['name']
             return redirect('/')
-        else:
-            return render_template('login.html', error='Invalid credentials')
+        return render_template('login.html', error='Invalid credentials')
     return render_template('login.html')
 
-# ─── SIGNUP ────────────────────────────────
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '').strip()
-
+        name = (request.form.get('name') or '').strip()
+        username = (request.form.get('username') or '').strip()
+        password = (request.form.get('password') or '').strip()
         if not name or not username or not password:
             return render_template('signup.html', error='All fields are required.')
-
         hashed = generate_password_hash(password)
         conn = get_db_connection()
         try:
-            conn.execute(
-                'INSERT INTO users (username, password, name) VALUES (?, ?, ?)',
-                (username, hashed, name)
-            )
+            conn.execute('INSERT INTO users (username, password, name) VALUES (?, ?, ?)', (username, hashed, name))
             conn.commit()
             return redirect('/login')
         except sqlite3.IntegrityError:
@@ -99,13 +103,12 @@ def signup():
             conn.close()
     return render_template('signup.html')
 
-# ─── LOGOUT ────────────────────────────────
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect('/login')
 
-# ─── DASHBOARD ─────────────────────────────
+# ─── DASHBOARD ──────────────────────────
 @app.route('/')
 def index():
     if 'user_id' not in session:
@@ -117,6 +120,7 @@ def index():
         'SELECT * FROM cold_calls WHERE rep_id = ? ORDER BY date_called DESC',
         (user_id,)
     ).fetchall()
+    conn.close()
 
     calls_by_month = defaultdict(list)
     reminders = []
@@ -130,15 +134,8 @@ def index():
         days_ago = (today - call_date).days
         if days_ago >= 7:
             suggestion = "Call again" if days_ago < 14 else "Schedule a site visit"
-            # expose both keys for template compatibility
-            reminders.append({
-                "company": call['company'],
-                "days_ago": days_ago,
-                "action": suggestion,
-                "suggestion": suggestion
-            })
+            reminders.append({"company": call['company'], "days_ago": days_ago, "action": suggestion})
 
-    conn.close()
     return render_template(
         'index.html',
         calls_by_month=calls_by_month,
@@ -148,64 +145,19 @@ def index():
         reminders=reminders
     )
 
-# ─── EDIT CALL ─────────────────────────────
-@app.route('/edit_call/<int:id>', methods=['GET', 'POST'])
-def edit_call(id):
-    if 'user_id' not in session:
-        return redirect('/login')
-    conn = get_db_connection()
-    call = conn.execute(
-        'SELECT * FROM cold_calls WHERE id = ? AND rep_id = ?',
-        (id, session['user_id'])
-    ).fetchone()
-    if not call:
-        conn.close()
-        return redirect('/')
-    if request.method == 'POST':
-        conn.execute('''
-            UPDATE cold_calls
-               SET company = ?, contact_name = ?, phone = ?, email = ?, address = ?, notes = ?
-             WHERE id = ? AND rep_id = ?
-        ''', (
-            request.form['company'],
-            request.form['contact_name'],
-            request.form['phone'],
-            request.form['email'],
-            request.form['address'],
-            request.form['notes'],
-            id,
-            session['user_id']
-        ))
-        conn.commit()
-        conn.close()
-        return redirect('/')
-    conn.close()
-    return render_template('edit_call.html', call=call)
-
-# ─── DELETE CALL ───────────────────────────
-@app.route('/delete_call/<int:id>')
-def delete_call(id):
-    if 'user_id' not in session:
-        return redirect('/login')
-    conn = get_db_connection()
-    conn.execute('DELETE FROM cold_calls WHERE id = ? AND rep_id = ?', (id, session['user_id']))
-    conn.commit()
-    conn.close()
-    return redirect('/')
-
-# ─── ADD CALL ──────────────────────────────
+# ─── CALLS CRUD ─────────────────────────
 @app.route('/add', methods=['POST'])
 def add_call():
     if 'user_id' not in session:
         return redirect('/login')
 
     rep_id       = session['user_id']
-    company      = request.form.get('company', '').strip()
-    contact_name = request.form.get('contact_name', '').strip()
-    phone        = request.form.get('phone', '').strip()
-    email        = request.form.get('email', '').strip()
-    address      = request.form.get('address', '').strip()
-    notes        = request.form.get('notes', '').strip()
+    company      = (request.form.get('company') or '').strip()
+    contact_name = (request.form.get('contact_name') or '').strip()
+    phone        = (request.form.get('phone') or '').strip()
+    email        = (request.form.get('email') or '').strip()
+    address      = (request.form.get('address') or '').strip()
+    notes        = (request.form.get('notes') or '').strip()
     date_called  = py_date.today().strftime('%Y-%m-%d')
 
     conn = get_db_connection()
@@ -217,7 +169,41 @@ def add_call():
     conn.close()
     return redirect('/')
 
-# ─── SCHEDULE (view + legacy POST) ─────────
+@app.route('/edit_call/<int:id>', methods=['GET', 'POST'])
+def edit_call(id):
+    if 'user_id' not in session:
+        return redirect('/login')
+    conn = get_db_connection()
+    call = conn.execute('SELECT * FROM cold_calls WHERE id = ? AND rep_id = ?', (id, session['user_id'])).fetchone()
+    if not call:
+        conn.close()
+        return redirect('/')
+    if request.method == 'POST':
+        conn.execute('''
+            UPDATE cold_calls SET company = ?, contact_name = ?, phone = ?, email = ?, address = ?, notes = ?
+            WHERE id = ? AND rep_id = ?
+        ''', (
+            request.form['company'], request.form['contact_name'], request.form['phone'],
+            request.form['email'], request.form['address'], request.form['notes'],
+            id, session['user_id']
+        ))
+        conn.commit()
+        conn.close()
+        return redirect('/')
+    conn.close()
+    return render_template('edit_call.html', call=call)
+
+@app.route('/delete_call/<int:id>')
+def delete_call(id):
+    if 'user_id' not in session:
+        return redirect('/login')
+    conn = get_db_connection()
+    conn.execute('DELETE FROM cold_calls WHERE id = ? AND rep_id = ?', (id, session['user_id']))
+    conn.commit()
+    conn.close()
+    return redirect('/')
+
+# ─── SCHEDULE (view + legacy POST) ───────
 @app.route('/schedule', methods=['GET', 'POST'])
 def schedule():
     if 'user_id' not in session:
@@ -231,7 +217,7 @@ def schedule():
         year = today.year
         month = today.month
 
-    # Accept POST to /schedule for backward compatibility
+    # Legacy: accept POST to /schedule
     if request.method == 'POST':
         title = (request.form.get('title') or '').strip()
         description = (request.form.get('description') or '').strip()
@@ -246,30 +232,26 @@ def schedule():
             ''', (user_id, title, description, date_val, time_val, event_type))
             conn.commit()
             conn.close()
-
             try:
                 y, m, _ = map(int, date_val.split('-'))
                 return redirect(f'/schedule?year={y}&month={m}')
             except Exception:
                 return redirect('/schedule')
 
-    # Build month window
     first_day = py_date(year, month, 1)
     _, total_days = monthrange(year, month)
     last_day = py_date(year, month, total_days)
 
-    # Fetch events for the visible month
     conn = get_db_connection()
     rows = conn.execute('''
         SELECT id, user_id, title, description, date, time, type
           FROM schedule
-         WHERE user_id = ?
-           AND date BETWEEN ? AND ?
+         WHERE user_id = ? AND date BETWEEN ? AND ?
          ORDER BY date, time
     ''', (user_id, first_day.isoformat(), last_day.isoformat())).fetchall()
     conn.close()
 
-    # Shape into { "YYYY-MM-DD": [ {title,time,notes,type,id} ] }
+    # Shape for JS: { "YYYY-MM-DD": [ {title,time,notes,type,id} ] }
     event_map = {}
     for e in rows:
         iso = e['date']
@@ -277,18 +259,18 @@ def schedule():
             'id': e['id'],
             'title': e['title'],
             'time': e['time'],
-            'notes': e['description'],  # align with schedule.html JS
+            'notes': e['description'],
             'type': e['type'],
         })
 
-    # Simple suggestion counts by keyword
+    # basic suggestions
     keywords = {"demo": 0, "visit": 0, "call": 0}
     for e in rows:
         t = (e['title'] or '').lower()
         for k in keywords:
             if k in t:
                 keywords[k] += 1
-    suggestions = [label.capitalize() for label, _ in sorted(keywords.items(), key=lambda x: -x[1])[:3]]
+    suggestions = [k.capitalize() for k, _ in sorted(keywords.items(), key=lambda x: -x[1])[:3]]
 
     return render_template(
         'schedule.html',
@@ -304,7 +286,7 @@ def schedule():
         suggestions=suggestions
     )
 
-# ─── ADD EVENT (new route used by the modal) ───────────────────────────────
+# POST from the Add Event modal
 @app.route('/add_event', methods=['POST'])
 def add_event():
     if 'user_id' not in session:
@@ -328,40 +310,32 @@ def add_event():
     conn.commit()
     conn.close()
 
-    # Send back to the same month
     try:
         y, m, _ = map(int, date_val.split('-'))
         return redirect(f'/schedule?year={y}&month={m}')
     except Exception:
         return redirect('/schedule')
 
-# ─── EDIT EVENT ────────────────────────────
 @app.route('/edit_event/<int:id>', methods=['GET', 'POST'])
 def edit_event(id):
     if 'user_id' not in session:
         return redirect('/login')
     conn = get_db_connection()
-    event = conn.execute(
-        'SELECT * FROM schedule WHERE id = ? AND user_id = ?',
-        (id, session['user_id'])
-    ).fetchone()
+    event = conn.execute('SELECT * FROM schedule WHERE id = ? AND user_id = ?', (id, session['user_id'])).fetchone()
     if not event:
         conn.close()
         return redirect('/schedule')
-
     if request.method == 'POST':
         conn.execute('''
-            UPDATE schedule
-               SET title = ?, description = ?, date = ?, time = ?, type = ?
-             WHERE id = ? AND user_id = ?
+            UPDATE schedule SET title = ?, description = ?, date = ?, time = ?, type = ?
+            WHERE id = ? AND user_id = ?
         ''', (
             request.form.get('title'),
             request.form.get('description'),
             request.form.get('date'),
             request.form.get('time'),
             request.form.get('type') or event['type'],
-            id,
-            session['user_id']
+            id, session['user_id']
         ))
         conn.commit()
         conn.close()
@@ -370,11 +344,9 @@ def edit_event(id):
             return redirect(f'/schedule?year={y}&month={m}')
         except Exception:
             return redirect('/schedule')
-
     conn.close()
     return render_template('edit_event.html', event=event)
 
-# ─── DELETE EVENT ──────────────────────────
 @app.route('/delete_event/<int:id>', methods=['POST', 'GET'])
 def delete_event(id):
     if 'user_id' not in session:
@@ -385,7 +357,7 @@ def delete_event(id):
     conn.close()
     return redirect('/schedule')
 
-# ─── START APP ─────────────────────────────
+# ─── DEV ENTRY ───────────────────────────
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, port=5008)
