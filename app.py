@@ -1,7 +1,6 @@
 # app.py
 from flask import Flask, render_template, request, redirect, session, url_for
 import sqlite3
-import calendar
 from datetime import datetime, timedelta, date as py_date
 from calendar import monthrange
 from collections import defaultdict
@@ -48,9 +47,9 @@ def init_db():
             user_id INTEGER,
             title TEXT NOT NULL,
             description TEXT,
-            date TEXT NOT NULL,
-            time TEXT,
-            type TEXT,
+            date TEXT NOT NULL,   -- ISO yyyy-mm-dd
+            time TEXT,            -- HH:MM (optional)
+            type TEXT,            -- e.g., "call", "visit", "demo"
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
@@ -88,14 +87,16 @@ def signup():
         hashed = generate_password_hash(password)
         conn = get_db_connection()
         try:
-            conn.execute('INSERT INTO users (username, password, name) VALUES (?, ?, ?)', (username, hashed, name))
+            conn.execute(
+                'INSERT INTO users (username, password, name) VALUES (?, ?, ?)',
+                (username, hashed, name)
+            )
             conn.commit()
             return redirect('/login')
         except sqlite3.IntegrityError:
             return render_template('signup.html', error='Username already exists.')
         finally:
             conn.close()
-
     return render_template('signup.html')
 
 # ─── LOGOUT ────────────────────────────────
@@ -109,13 +110,17 @@ def logout():
 def index():
     if 'user_id' not in session:
         return redirect('/login')
+
     user_id = session['user_id']
     conn = get_db_connection()
-    raw_calls = conn.execute('SELECT * FROM cold_calls WHERE rep_id = ? ORDER BY date_called DESC', (user_id,)).fetchall()
+    raw_calls = conn.execute(
+        'SELECT * FROM cold_calls WHERE rep_id = ? ORDER BY date_called DESC',
+        (user_id,)
+    ).fetchall()
 
     calls_by_month = defaultdict(list)
     reminders = []
-    today = datetime.today().date()
+    today = py_date.today()
 
     for call in raw_calls:
         call_date = datetime.strptime(call['date_called'], '%Y-%m-%d').date()
@@ -125,14 +130,23 @@ def index():
         days_ago = (today - call_date).days
         if days_ago >= 7:
             suggestion = "Call again" if days_ago < 14 else "Schedule a site visit"
+            # expose both keys for template compatibility
             reminders.append({
                 "company": call['company'],
                 "days_ago": days_ago,
+                "action": suggestion,
                 "suggestion": suggestion
             })
 
     conn.close()
-    return render_template('index.html', calls_by_month=calls_by_month, today=today, user=session['name'], datetime=datetime, reminders=reminders)
+    return render_template(
+        'index.html',
+        calls_by_month=calls_by_month,
+        today=today,
+        user=session['name'],
+        datetime=datetime,
+        reminders=reminders
+    )
 
 # ─── EDIT CALL ─────────────────────────────
 @app.route('/edit_call/<int:id>', methods=['GET', 'POST'])
@@ -140,14 +154,18 @@ def edit_call(id):
     if 'user_id' not in session:
         return redirect('/login')
     conn = get_db_connection()
-    call = conn.execute('SELECT * FROM cold_calls WHERE id = ? AND rep_id = ?', (id, session['user_id'])).fetchone()
+    call = conn.execute(
+        'SELECT * FROM cold_calls WHERE id = ? AND rep_id = ?',
+        (id, session['user_id'])
+    ).fetchone()
     if not call:
         conn.close()
         return redirect('/')
     if request.method == 'POST':
         conn.execute('''
-            UPDATE cold_calls SET company = ?, contact_name = ?, phone = ?, email = ?, address = ?, notes = ?
-            WHERE id = ? AND rep_id = ?
+            UPDATE cold_calls
+               SET company = ?, contact_name = ?, phone = ?, email = ?, address = ?, notes = ?
+             WHERE id = ? AND rep_id = ?
         ''', (
             request.form['company'],
             request.form['contact_name'],
@@ -188,7 +206,7 @@ def add_call():
     email        = request.form.get('email', '').strip()
     address      = request.form.get('address', '').strip()
     notes        = request.form.get('notes', '').strip()
-    date_called  = datetime.today().strftime('%Y-%m-%d')
+    date_called  = py_date.today().strftime('%Y-%m-%d')
 
     conn = get_db_connection()
     conn.execute('''
@@ -197,10 +215,9 @@ def add_call():
     ''', (rep_id, company, contact_name, phone, email, address, notes, date_called))
     conn.commit()
     conn.close()
-
     return redirect('/')
 
-# ─── SCHEDULE ──────────────────────────────
+# ─── SCHEDULE (view + legacy POST) ─────────
 @app.route('/schedule', methods=['GET', 'POST'])
 def schedule():
     if 'user_id' not in session:
@@ -210,53 +227,68 @@ def schedule():
     year = request.args.get('year', type=int)
     month = request.args.get('month', type=int)
     today = py_date.today()
-
     if not year or not month:
         year = today.year
         month = today.month
 
+    # Accept POST to /schedule for backward compatibility
+    if request.method == 'POST':
+        title = (request.form.get('title') or '').strip()
+        description = (request.form.get('description') or '').strip()
+        date_val = (request.form.get('date') or '').strip()
+        time_val = (request.form.get('time') or '').strip()
+        event_type = (request.form.get('type') or 'call').strip()
+        if title and date_val:
+            conn = get_db_connection()
+            conn.execute('''
+                INSERT INTO schedule (user_id, title, description, date, time, type)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, title, description, date_val, time_val, event_type))
+            conn.commit()
+            conn.close()
+
+            try:
+                y, m, _ = map(int, date_val.split('-'))
+                return redirect(f'/schedule?year={y}&month={m}')
+            except Exception:
+                return redirect('/schedule')
+
+    # Build month window
     first_day = py_date(year, month, 1)
     _, total_days = monthrange(year, month)
     last_day = py_date(year, month, total_days)
 
+    # Fetch events for the visible month
     conn = get_db_connection()
-
-    if request.method == 'POST':
-        title = request.form.get('title')
-        description = request.form.get('description')
-        date_val = request.form.get('date')
-        time = request.form.get('time')
-        event_type = request.form.get('type', 'call')
-
-        if title and date_val:
-            conn.execute('''
-                INSERT INTO schedule (user_id, title, description, date, time, type)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, title, description, date_val, time, event_type))
-            conn.commit()
-
-    events = conn.execute('''
-        SELECT * FROM schedule
-        WHERE user_id = ? AND date BETWEEN ? AND ?
+    rows = conn.execute('''
+        SELECT id, user_id, title, description, date, time, type
+          FROM schedule
+         WHERE user_id = ?
+           AND date BETWEEN ? AND ?
+         ORDER BY date, time
     ''', (user_id, first_day.isoformat(), last_day.isoformat())).fetchall()
     conn.close()
 
+    # Shape into { "YYYY-MM-DD": [ {title,time,notes,type,id} ] }
     event_map = {}
-    for event in events:
-        event_date = event['date']
-        if event_date not in event_map:
-            event_map[event_date] = []
-        event_map[event_date].append(dict(event))
+    for e in rows:
+        iso = e['date']
+        event_map.setdefault(iso, []).append({
+            'id': e['id'],
+            'title': e['title'],
+            'time': e['time'],
+            'notes': e['description'],  # align with schedule.html JS
+            'type': e['type'],
+        })
 
+    # Simple suggestion counts by keyword
     keywords = {"demo": 0, "visit": 0, "call": 0}
-    for e in events:
-        title = e['title'].lower()
-        for key in keywords:
-            if key in title:
-                keywords[key] += 1
-
-    top_3 = sorted(keywords.items(), key=lambda x: -x[1])[:3]
-    suggestions = [label.capitalize() for label, _ in top_3]
+    for e in rows:
+        t = (e['title'] or '').lower()
+        for k in keywords:
+            if k in t:
+                keywords[k] += 1
+    suggestions = [label.capitalize() for label, _ in sorted(keywords.items(), key=lambda x: -x[1])[:3]]
 
     return render_template(
         'schedule.html',
@@ -272,36 +304,78 @@ def schedule():
         suggestions=suggestions
     )
 
+# ─── ADD EVENT (new route used by the modal) ───────────────────────────────
+@app.route('/add_event', methods=['POST'])
+def add_event():
+    if 'user_id' not in session:
+        return redirect('/login')
+
+    user_id = session['user_id']
+    title = (request.form.get('title') or '').strip()
+    description = (request.form.get('notes') or request.form.get('description') or '').strip()
+    date_val = (request.form.get('date') or '').strip()  # yyyy-mm-dd
+    time_val = (request.form.get('time') or '').strip()
+    event_type = (request.form.get('type') or 'call').strip()
+
+    if not title or not date_val:
+        return redirect('/schedule')
+
+    conn = get_db_connection()
+    conn.execute('''
+        INSERT INTO schedule (user_id, title, description, date, time, type)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_id, title, description, date_val, time_val, event_type))
+    conn.commit()
+    conn.close()
+
+    # Send back to the same month
+    try:
+        y, m, _ = map(int, date_val.split('-'))
+        return redirect(f'/schedule?year={y}&month={m}')
+    except Exception:
+        return redirect('/schedule')
+
 # ─── EDIT EVENT ────────────────────────────
 @app.route('/edit_event/<int:id>', methods=['GET', 'POST'])
 def edit_event(id):
     if 'user_id' not in session:
         return redirect('/login')
     conn = get_db_connection()
-    event = conn.execute('SELECT * FROM schedule WHERE id = ? AND user_id = ?', (id, session['user_id'])).fetchone()
+    event = conn.execute(
+        'SELECT * FROM schedule WHERE id = ? AND user_id = ?',
+        (id, session['user_id'])
+    ).fetchone()
     if not event:
         conn.close()
         return redirect('/schedule')
+
     if request.method == 'POST':
         conn.execute('''
-            UPDATE schedule SET title = ?, description = ?, date = ?, time = ?
-            WHERE id = ? AND user_id = ?
+            UPDATE schedule
+               SET title = ?, description = ?, date = ?, time = ?, type = ?
+             WHERE id = ? AND user_id = ?
         ''', (
-            request.form['title'],
-            request.form['description'],
-            request.form['date'],
-            request.form['time'],
+            request.form.get('title'),
+            request.form.get('description'),
+            request.form.get('date'),
+            request.form.get('time'),
+            request.form.get('type') or event['type'],
             id,
             session['user_id']
         ))
         conn.commit()
         conn.close()
-        return redirect('/schedule')
+        try:
+            y, m, _ = map(int, (request.form.get('date') or '').split('-'))
+            return redirect(f'/schedule?year={y}&month={m}')
+        except Exception:
+            return redirect('/schedule')
+
     conn.close()
     return render_template('edit_event.html', event=event)
 
 # ─── DELETE EVENT ──────────────────────────
-@app.route('/delete_event/<int:id>')
+@app.route('/delete_event/<int:id>', methods=['POST', 'GET'])
 def delete_event(id):
     if 'user_id' not in session:
         return redirect('/login')

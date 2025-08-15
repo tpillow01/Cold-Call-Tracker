@@ -1,250 +1,291 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>{{ user }}'s Calendar</title>
+  <meta charset="UTF-8" />
+  <title>Schedule — Cold Call Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="theme-color" content="#cc0000" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
 
-  <!-- Site CSS + PWA -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <meta name="theme-color" content="#cc0000">
-
-  <!-- Important: give the viewport meta an id so we can toggle zoom -->
-  <meta id="viewportMeta"
-        name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
-  <!-- Page-specific tweaks (kept minimal to avoid fighting styles.css) -->
+  <!-- page-scoped polish -->
   <style>
-    :root { font-size: 18px; }
-    .button-bar { margin: 20px; display: flex; gap: 10px; }
-    .calendar-container { display:flex; gap:30px; padding: 0 30px; align-items:flex-start; }
-    .calendar-panel { flex: 2; }
-    .suggestion-panel {
-      flex: 1; background:#1a1a1a; padding:20px; border-radius:10px;
-      border:2px solid #cc0000; box-shadow: 0 0 10px rgba(255, 0, 0, .3);
+    .cal-scroll{overflow-x:auto;padding-bottom:6px}
+    .cal-inner{min-width:920px}
+    @media (max-width:900px){.cal-inner{min-width:780px}}
+
+    .weekday-bar{
+      display:grid;grid-template-columns:repeat(7, minmax(0,1fr));gap:1px;background:var(--border);
+      border-bottom:1px solid var(--border)
     }
-    .suggestion-panel h3 { color: #ff3333; margin-top:0; }
-
-    .calendar-nav { display:flex; justify-content:space-between; align-items:center; margin: 20px 0; }
-    .calendar-nav a { padding:10px 20px; background:#444; color:#fff; text-decoration:none; border-radius:6px; }
-    .calendar-nav a:hover { background:#cc0000; }
-
-    .weekdays { display:grid; grid-template-columns: repeat(7, 1fr); background:#111; text-align:center; padding:10px 0; border-bottom:2px solid #444; font-weight:700; }
-    .calendar { display:grid; grid-template-columns: repeat(7, 1fr); gap: 6px; background:#222; border: 1px solid #444; border-radius:10px; padding:6px; }
-    .day {
-      background:#1a1a1a; border-radius:8px; min-height:110px; padding:12px; position:relative; cursor:pointer;
-      border:1px solid #333;
+    .weekday{
+      background:linear-gradient(180deg,#171b22,#13171d);
+      padding:10px 8px;text-align:center;color:#e6e8ed;font-weight:800;font-size:.92rem
     }
-    .day.today { border-color:#ff3333; box-shadow: 0 0 0 2px rgba(255, 51, 51, .25); }
-    .date { font-weight:700; color:#ff5555; margin-bottom:8px; }
-    .event { background:#cc0000; color:#fff; padding:4px 6px; border-radius:4px; font-size:.85rem; margin-top:4px; overflow:hidden; }
 
-    .legend { margin-top: 16px; display:flex; gap:16px; font-size:.9rem; }
-    .legend span { width:14px; height:14px; display:inline-block; border-radius:4px; }
-    .legend .call { background:#cc0000; }
-    .legend .visit { background:#0077cc; }
-    .legend .demo { background:#ffaa00; }
-
-    .day-breakdown-panel { display:none; }
-    .hour-block { background:#1a1a1a; border:1px solid #333; padding:10px; margin-bottom:6px; border-radius:6px; }
-    .hour-label { font-weight:700; color:#ff3333; }
-
-    /* Add Event Modal (mobile-safe) */
-    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); justify-content:center; align-items:center; z-index:1000; }
-    .modal-card {
-      background:#1a1a1a; padding:40px; border-radius:10px; border:2px solid #cc0000;
-      width:90%; max-width:600px; box-shadow:0 0 10px #cc0000; position:relative;
+    .calendar.panel{padding:0} /* use head + grid only */
+    .calendar .cal-head{
+      display:grid; grid-template-columns:auto 1fr auto; align-items:center;
+      gap:10px; padding:12px 14px; border-bottom:1px solid var(--border);
+      background:linear-gradient(180deg,#14181f,#11151b)
     }
-    .modal-close { position:absolute; top:10px; right:20px; font-size:28px; color:#fff; cursor:pointer; }
+    .calendar .cal-head h3{margin:0; text-align:center}
 
-    @media (max-width: 768px) {
-      .calendar-container { flex-direction:column; padding: 0 16px; }
+    .calendar-grid{
+      display:grid; gap:1px; background:var(--border);
+      grid-template-columns:repeat(7, minmax(0, 1fr)); /* reinforced */
     }
-    @media (max-width: 600px) {
-      .modal-card { width:100vw; height:100vh; max-width:none; border-radius:0; padding:20px; overflow-y:auto; }
-      input, textarea, select { font-size:18px !important; }
-      body { overscroll-behavior: contain; touch-action: manipulation; }
+    .day{
+      background:linear-gradient(180deg,#11161c,#0f1419);
+      padding:10px 8px; border:1px solid rgba(255,255,255,.02); border-radius:4px;
+      display:flex; flex-direction:column; gap:6px; transition:background .15s ease
     }
+    .day:hover{background:#141a22}
+    .day .dnum{
+      position:absolute; top:6px; right:6px; font-weight:900; font-size:.8rem; color:#cfd5dd;
+      padding:2px 8px; border-radius:999px; background:#0e1319; border:1px solid #1f2631
+    }
+    .day.today{outline:2px solid var(--accent); outline-offset:-2px}
+    .day.today .dnum{color:#fff; background:var(--accent); border-color:var(--accent)}
+
+    .event.call{background:rgba(204,0,0,.16);border:1px solid rgba(204,0,0,.28);color:#ffd4d4;border-radius:10px;padding:6px 8px;font-weight:800;font-size:.86rem}
+    .event.visit{background:rgba(31,157,85,.18);border:1px solid rgba(31,157,85,.3);color:#c9f1da;border-radius:10px;padding:6px 8px;font-weight:800;font-size:.86rem}
+    .event.demo{background:rgba(192,142,0,.16);border:1px solid rgba(192,142,0,.3);color:#ffefb5;border-radius:10px;padding:6px 8px;font-weight:800;font-size:.86rem}
+
+    /* modal list spacing */
+    #dayBody .event{margin:6px 0}
   </style>
 </head>
 <body>
-  <!-- Shared header style from styles.css -->
-  <div class="top-header">
-    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="TYNAN">
-    <h1>{{ user }}'s Schedule</h1>
-    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI">
-  </div>
 
-  <div class="button-bar">
-    <a href="/" class="btn">🏠 Dashboard</a>
-    <button class="btn" onclick="enableZoom(); openAddEvent()">➕ Add Event</button>
-  </div>
-
-  <div class="calendar-container">
-    <!-- Calendar View -->
-    <div class="calendar-panel" id="calendarPanel">
-      <div class="calendar-nav">
-        {% set prev_month = month - 1 if month > 1 else 12 %}
-        {% set prev_year = year - 1 if month == 1 else year %}
-        {% set next_month = month + 1 if month < 12 else 1 %}
-        {% set next_year = year + 1 if month == 12 else year %}
-        <a href="{{ url_for('schedule') }}?year={{ prev_year }}&month={{ prev_month }}">← {{ (date(year, month, 1) - timedelta(days=1)).strftime('%B') }}</a>
-        <h2>{{ today.replace(year=year, month=month, day=1).strftime('%B %Y') }}</h2>
-        <a href="{{ url_for('schedule') }}?year={{ next_year }}&month={{ next_month }}">{{ (date(year, month, 28) + timedelta(days=4)).replace(day=1).strftime('%B') }} →</a>
+  <!-- Clean header (uses updated styles.css rules) -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-wrap">
+        <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
+        <div class="brand-title">Cold Call Tracker</div>
+        <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
       </div>
-
-      <div class="weekdays">
-        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
-      </div>
-
-      <div class="calendar">
-        {% set first_weekday = date(year, month, 1).weekday() %}
-        {% set offset = (first_weekday + 1) % 7 %}
-        {% for _ in range(offset) %}<div class="day"></div>{% endfor %}
-
-        {% for day in range(1, total_days + 1) %}
-          {% set current_date = date(year, month, day) %}
-          {% set date_str = current_date.strftime('%Y-%m-%d') %}
-          <div class="day {% if current_date == today %}today{% endif %}"
-               onclick="enableZoom(); showDayBreakdown('{{ date_str }}')">
-            <div class="date">{{ day }}</div>
-            {% if event_map.get(date_str) %}
-              {% for e in event_map[date_str] %}
-                <div class="event" data-type="{{ e.get('type', 'call') }}" title="{{ e.description or '' }}">
-                  {{ e.title }}{% if e.time %} @ {{ e.time }}{% endif %}
-                </div>
-              {% endfor %}
-            {% endif %}
-          </div>
-        {% endfor %}
-      </div>
-
-      <div class="legend">
-        <div><span class="call"></span> Sales Call</div>
-        <div><span class="visit"></span> Customer Visit</div>
-        <div><span class="demo"></span> Site Demo</div>
-      </div>
+      <nav class="topnav">
+        <a href="/">Dashboard</a>
+        <a href="/schedule">Schedule</a>
+        <a href="/logout">Logout</a>
+      </nav>
     </div>
+  </header>
 
-    <!-- Suggestions Panel -->
-    <aside class="suggestion-panel">
-      <h3>Suggestions for What to Schedule Next</h3>
-      <ul>
-        <li>Customer Visit</li>
-        <li>Site Demo</li>
-        <li>Sales Call</li>
-      </ul>
+  <div class="shell">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sb-title">MENU</div>
+      <div class="sb-nav">
+        <a class="sb-btn" href="/">Dashboard</a>
+        <a class="sb-btn active" href="/schedule">📅 Schedule</a>
+        <button class="sb-btn" type="button" onclick="document.getElementById('newEventModal').classList.add('open')">➕ Add Event</button>
+        <a class="sb-btn" href="/logout">Logout</a>
+      </div>
+      <div class="sb-legend">
+        <div class="legend-item"><span class="legend-dot red"></span> Follow-up overdue</div>
+        <div class="legend-item"><span class="legend-dot gray"></span> Due today</div>
+      </div>
     </aside>
 
-    <!-- Day Breakdown Panel -->
-    <div class="day-breakdown-panel" id="dayBreakdownContainer">
-      <h2 id="dayBreakdownTitle"></h2>
-      <div id="hourlySlots"></div>
-      <button class="btn" onclick="disableZoom(); returnToCalendar()">← Back to Calendar</button>
+    <!-- Calendar -->
+    <main>
+      <section class="calendar panel">
+        <div class="cal-head">
+          <div class="btn-row"><button class="btn" id="prevBtn" type="button">← Prev</button></div>
+          <h3 id="calTitle"></h3>
+          <div class="btn-row">
+            <button class="btn" id="todayBtn" type="button">Today</button>
+            <button class="btn" id="nextBtn" type="button">Next →</button>
+          </div>
+        </div>
+
+        <div class="cal-scroll">
+          <div class="cal-inner">
+            <div class="weekday-bar">
+              <div class="weekday">Sun</div><div class="weekday">Mon</div><div class="weekday">Tue</div>
+              <div class="weekday">Wed</div><div class="weekday">Thu</div><div class="weekday">Fri</div><div class="weekday">Sat</div>
+            </div>
+            <div class="calendar-grid" id="calGrid" data-year="{{ year }}" data-month="{{ month }}"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Day modal -->
+  <div class="modal" id="dayModal" aria-hidden="true">
+    <div class="dialog">
+      <div class="head">
+        <h2 class="mt-0 mb-0" id="dayTitle">Day</h2>
+        <button class="btn icon ghost" type="button" onclick="document.getElementById('dayModal').classList.remove('open')">✕</button>
+      </div>
+      <div class="body" id="dayBody"></div>
+      <div class="foot">
+        <button class="btn" type="button" onclick="document.getElementById('dayModal').classList.remove('open')">Close</button>
+      </div>
     </div>
   </div>
 
-  <!-- Add Event Modal -->
-  <div class="modal" id="eventModal" aria-hidden="true">
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="addEventTitle">
-      <span class="modal-close" onclick="disableZoom(); closeAddEvent()" aria-label="Close">&times;</span>
-      <h2 id="addEventTitle" style="color:#ff3333; margin-bottom:20px;">Add New Event</h2>
-      <form method="POST" action="/schedule" style="display:flex; flex-direction:column; gap:15px;">
-        <label>Title</label>
-        <input type="text" name="title" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
-        <label>Description</label>
-        <input type="text" name="description" style="padding:10px; font-size:16px; border-radius:6px; border:none;">
-        <label>Date</label>
-        <input type="date" name="date" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
-        <label>Time</label>
-        <input type="time" name="time" style="padding:10px; font-size:16px; border-radius:6px; border:none;">
-        <label>Type</label>
-        <select name="type" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
-          <option value="call">Sales Call</option>
-          <option value="visit">Customer Visit</option>
-          <option value="demo">Site Demo</option>
-        </select>
-        <button type="submit" class="btn" style="margin-top:10px;">Save</button>
+  <!-- Add Event modal -->
+  <div class="modal" id="newEventModal" aria-hidden="true">
+    <div class="dialog">
+      <div class="head">
+        <h2 class="mt-0 mb-0">Add Event</h2>
+        <button class="btn icon ghost" type="button" onclick="document.getElementById('newEventModal').classList.remove('open')">✕</button>
+      </div>
+      <form id="add-event-form" action="/add_event" method="POST" class="form form-vertical">
+        <div class="body">
+          <div class="form-grid">
+            <div class="field col-6">
+              <label class="label" for="evt_date">Date</label>
+              <input id="evt_date" class="input" type="date" name="date" required>
+            </div>
+            <div class="field col-6">
+              <label class="label" for="evt_time">Time</label>
+              <input id="evt_time" class="input" type="time" name="time">
+            </div>
+            <div class="field col-12">
+              <label class="label" for="evt_title">Title</label>
+              <input id="evt_title" class="input" type="text" name="title" placeholder="Follow-up call with Acme" required>
+            </div>
+            <div class="field col-12">
+              <label class="label" for="evt_notes">Notes</label>
+              <textarea id="evt_notes" class="textarea" name="notes" rows="3" placeholder="Key points for the call…"></textarea>
+            </div>
+            <div class="field col-12">
+              <label class="label" for="evt_type">Type</label>
+              <select id="evt_type" class="select" name="type">
+                <option value="call" selected>Call</option>
+                <option value="visit">Customer Visit</option>
+                <option value="demo">Site Demo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="foot">
+          <button class="btn" type="button" onclick="document.getElementById('newEventModal').classList.remove('open')">Cancel</button>
+          <button class="btn primary" type="submit">Save</button>
+        </div>
       </form>
     </div>
   </div>
 
-  <!-- Safely embed event_map JSON to avoid JS linter errors -->
-  <script id="events-data" type="application/json">
-    {{ event_map | tojson | safe }}
+  <!-- Events JSON -->
+  <script id="events-json" type="application/json">
+    {{ event_map | tojson }}
   </script>
 
   <script>
-    // Read events JSON safely
-    const events = (() => {
-      try {
-        const el = document.getElementById('events-data');
-        return el ? JSON.parse(el.textContent) : {};
-      } catch { return {}; }
-    })();
+    // ===== Calendar logic (fixed-size cells + "+N more") =====
+    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const grid = document.getElementById('calGrid');
+    let y = parseInt(grid.dataset.year || new Date().getFullYear(), 10);
+    let m = parseInt(grid.dataset.month || (new Date().getMonth()+1), 10); // 1-12
+    const events = JSON.parse(document.getElementById('events-json').textContent || "{}"); // { "YYYY-MM-DD": [ {title,time,notes,type} ] }
 
-    function openAddEvent(){ document.getElementById('eventModal').style.display = 'flex'; }
-    function closeAddEvent(){ document.getElementById('eventModal').style.display = 'none'; }
+    const titleEl = document.getElementById('calTitle');
+    const dayModal = document.getElementById('dayModal');
+    const dayBody  = document.getElementById('dayBody');
+    const dayTitle = document.getElementById('dayTitle');
 
-    function showDayBreakdown(date) {
-      document.getElementById("calendarPanel").style.display = "none";
-      document.getElementById("dayBreakdownContainer").style.display = "block";
+    const MAX_CHIPS = 2; // show up to 2 chips in a cell; rest goes to "+N more"
 
-      const breakdownTitle = document.getElementById("dayBreakdownTitle");
-      const slotContainer  = document.getElementById("hourlySlots");
-      const formattedDate  = new Date(date).toDateString();
-      breakdownTitle.textContent = "Schedule for " + formattedDate;
+    function pad(n){ return String(n).padStart(2,'0'); }
+    function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }
+    function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 
-      // Build hour slots 07:00–18:00 with both display label and 24h key
-      const hours = [];
-      for (let i = 7; i <= 18; i++) {
-        const h12 = i % 12 || 12;
-        const ampm = i < 12 ? 'AM' : 'PM';
-        const label = `${h12}:00 ${ampm}`;
-        const key   = `${String(i).padStart(2,'0')}:00`; // "07:00", "13:00"
-        hours.push({ label, key });
+    function openDayModal(iso, label){
+      const list = events[iso] || [];
+      dayTitle.textContent = label;
+      dayBody.innerHTML = list.length
+        ? list.map(e => `
+            <div class="event ${e.type ? e.type : 'call'}">
+              ${e.time ? `<strong>${e.time}</strong> — ` : ""}${e.title}
+              ${e.notes ? `<div class="subtle" style="margin-top:4px">${e.notes}</div>` : ""}
+            </div>`).join("")
+        : `<div class="empty">No events for this day.</div>`;
+      dayModal.classList.add('open');
+    }
+
+    function drawCalendar(year, month){
+      grid.innerHTML = "";
+      titleEl.textContent = `${monthNames[month-1]} ${year}`;
+
+      const first = new Date(year, month-1, 1);
+      const startDay = first.getDay();
+      const totalDays = daysInMonth(year, month);
+      const totalCells = 42;
+      const tISO = todayISO();
+      const frag = document.createDocumentFragment();
+
+      for(let cell=0; cell<totalCells; cell++){
+        const box = document.createElement('div');
+        box.className = 'day';
+
+        const dayNum = cell - startDay + 1;
+        if (dayNum > 0 && dayNum <= totalDays){
+          const iso = `${year}-${pad(month)}-${pad(dayNum)}`;
+          const label = `${monthNames[month-1]} ${dayNum}, ${year}`;
+
+          const dEl = document.createElement('div');
+          dEl.className = 'dnum';
+          dEl.textContent = dayNum;
+          box.appendChild(dEl);
+
+          if (iso === tISO){ box.classList.add('today'); }
+
+          const wrap = document.createElement('div');
+          wrap.className = 'events';
+          box.appendChild(wrap);
+
+          const list = events[iso] || [];
+          list.slice(0, MAX_CHIPS).forEach(e=>{
+            const chip = document.createElement('div');
+            chip.className = 'event ' + (e.type ? e.type : 'call');
+            chip.textContent = e.time ? `${e.time} — ${e.title}` : e.title;
+            wrap.appendChild(chip);
+          });
+
+          if (list.length > MAX_CHIPS){
+            const more = document.createElement('button');
+            more.className = 'more-link';
+            more.type = 'button';
+            more.textContent = `+${list.length - MAX_CHIPS} more`;
+            more.addEventListener('click', (ev)=>{ ev.stopPropagation(); openDayModal(iso, label); });
+            wrap.appendChild(more);
+          }
+
+          box.addEventListener('click', ()=> openDayModal(iso, label));
+        }else{
+          box.style.background = '#0f1318';
+          box.style.opacity = .55;
+        }
+        frag.appendChild(box);
       }
-
-      const eventsOnDate = events[date] || [];
-      slotContainer.innerHTML = hours.map(hour => {
-        // Match any event whose time starts with the hour key (accepts "07:00" or "07:30")
-        const match = eventsOnDate.find(e => (e.time || '').startsWith(hour.key));
-        const content = match
-          ? `<div class="event">${match.title}${match.description ? ' — ' + match.description : ''}</div>`
-          : `<div class="empty">No event</div>`;
-        return `<div class="hour-block">
-                  <div class="hour-label">${hour.label}</div>
-                  ${content}
-                </div>`;
-      }).join('');
+      grid.appendChild(frag);
     }
 
-    function returnToCalendar() {
-      document.getElementById("calendarPanel").style.display = "block";
-      document.getElementById("dayBreakdownContainer").style.display = "none";
+    function navigate(delta){
+      m += delta;
+      if (m <= 0){ m = 12; y -= 1; }
+      if (m > 12){ m = 1; y += 1; }
+      drawCalendar(y, m);
     }
 
-    // PWA SW
+    document.getElementById('prevBtn').addEventListener('click', ()=>navigate(-1));
+    document.getElementById('nextBtn').addEventListener('click', ()=>navigate(1));
+    document.getElementById('todayBtn').addEventListener('click', ()=>{
+      const d = new Date(); y = d.getFullYear(); m = d.getMonth()+1; drawCalendar(y, m);
+    });
+
+    drawCalendar(y, m);
+
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/static/sw.js')
-        .then(() => console.log('✅ Service Worker Registered'))
-        .catch(err => console.error('❌ Service Worker Error:', err));
+      navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
     }
-
-    // Zoom helpers for modal / detail view
-    function setViewport(content) {
-      const meta = document.getElementById('viewportMeta');
-      if (meta) meta.setAttribute('content', content);
-    }
-    function enableZoom()  { setViewport('width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes'); }
-    function disableZoom() { setViewport('width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'); }
-
-    // Expose for inline onclicks
-    window.enableZoom = enableZoom;
-    window.disableZoom = disableZoom;
-    window.openAddEvent = openAddEvent;
-    window.closeAddEvent = closeAddEvent;
   </script>
 </body>
 </html>

@@ -7,68 +7,88 @@
   <meta name="theme-color" content="#cc0000" />
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
-  <style>
-    /* tiny helpers only */
-    .month-header{cursor:pointer;background:#222}
-    .month-header td{font-weight:700;text-align:left}
-    .btn-row{display:flex;gap:8px;justify-content:center}
-    /* show the modal using the global .modal styles */
-    .modal.show{display:flex;animation:zoomIn .3s ease forwards}
-  </style>
-
   <script>
+    // Month group toggle
     function toggleMonth(month){
-      const rows = document.querySelectorAll(`.month-${month.replace(/\s/g,'-')}`);
-      rows.forEach(r => r.style.display = (r.style.display === 'table-row') ? 'none' : 'table-row');
+      const key = month.replace(/\s/g,'-');
+      document.querySelectorAll(`.month-${key}`).forEach(r=>{
+        r.style.display = (r.style.display === 'table-row') ? 'none' : 'table-row';
+      });
     }
-    function openModal(){
-      const m = document.getElementById('callModal');
-      m.classList.add('show');
-    }
-    function closeModal(){
-      const m = document.getElementById('callModal');
-      m.classList.remove('show');
-    }
+    // Modal controls
+    function openModal(){ document.getElementById('callModal').classList.add('open'); }
+    function closeModal(){ document.getElementById('callModal').classList.remove('open'); }
   </script>
 </head>
 <body>
-  <!-- Top header -->
-  <div class="top-header">
-    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
-    <h1>Welcome, {{ user }}</h1>
-    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
-  </div>
 
-  <div class="main-layout">
+  <!-- Top Bar (trimmed nav) -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-wrap">
+        <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
+        <div class="brand-title">Cold Call Tracker</div>
+        <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
+      </div>
+      <nav class="topnav">
+        <a href="/">Dashboard</a>
+        <a href="/schedule">Schedule</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Shell layout -->
+  <div class="shell">
     <!-- Sidebar -->
     <aside class="sidebar">
-      <h2>Menu</h2>
-      <a href="/schedule" class="btn">📅 Schedule</a>
-      <button class="btn" type="button" onclick="openModal()">📞 Log New Call</button>
-      <a href="/logout" class="btn btn-logout">Logout</a>
+      <div class="sb-title">MENU</div>
+      <div class="sb-nav">
+        <a class="sb-btn active" href="/">Dashboard</a>
+        <button class="sb-btn" type="button" onclick="openModal()">📞 Log New Call</button>
+        <a class="sb-btn" href="/schedule">📅 Schedule</a>
+        <a class="sb-btn" href="/logout">Logout</a>
+      </div>
+      <div class="sb-legend">
+        <div class="legend-item"><span class="legend-dot red"></span> Follow-up overdue</div>
+        <div class="legend-item"><span class="legend-dot gray"></span> Due today</div>
+      </div>
+      <hr class="mt-12 mb-8">
+      <div class="subtle">Welcome, <strong>{{ user }}</strong></div>
     </aside>
 
-    <!-- Content -->
-    <div class="content">
+    <!-- Main -->
+    <main>
       <!-- Reminders -->
-      <section class="card">
-        <h2>Reminders</h2>
-        {% for reminder in reminders %}
-          <div class="reminder-card">
-            <h3>{{ reminder['company'] }}</h3>
-            <p>Last contacted: {{ reminder['days_ago'] }} days ago</p>
-            <p>Suggested Action: <strong>{{ reminder['action'] }}</strong></p>
+      <section class="panel">
+        <h2 class="section-title">Reminders</h2>
+        <div class="reminders">
+          {% if reminders %}
+            {% for reminder in reminders %}
+              <div class="rem-card">
+                <h3>{{ reminder['company'] }}</h3>
+                <div class="k">Last contacted: {{ reminder['days_ago'] }} days ago</div>
+                <div class="k">Suggested Action: <strong>{{ reminder['action'] }}</strong></div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="rem-card">
+              <h3>Nothing due today</h3>
+              <div class="k">You're all caught up.</div>
+            </div>
+          {% endif %}
+          <div class="rem-card red">
+            <h3>Log a New Cold Call</h3>
+            <button class="cta" type="button" onclick="openModal()">Open form</button>
           </div>
-        {% else %}
-          <p>No follow-ups due today.</p>
-        {% endfor %}
+        </div>
       </section>
 
       <!-- Past Cold Calls -->
-      <section class="card">
-        <h2>Past Cold Calls</h2>
+      <section class="panel mt-16">
+        <h2 class="section-title">Past Cold Calls</h2>
         <div class="table-wrap">
-          <table class="table">
+          <table>
             <thead>
               <tr>
                 <th>Company</th>
@@ -82,11 +102,11 @@
             </thead>
             <tbody>
               {% for month, calls in calls_by_month.items() %}
-                <tr class="month-header" onclick="toggleMonth('{{ month }}')">
-                  <td colspan="7">{{ month }}</td>
+                <tr class="month-header" style="cursor:pointer;background:#171b22" onclick="toggleMonth('{{ month }}')">
+                  <td colspan="7" style="font-weight:800">{{ month }}</td>
                 </tr>
                 {% for call in calls %}
-                  <tr class="call-row month-{{ month.replace(' ', '-') }}" style="display:none;">
+                  <tr class="month-{{ month.replace(' ', '-') }}" style="display:none;">
                     <td>{{ call['company'] }}</td>
                     <td>{{ call['contact_name'] or '—' }}</td>
                     <td>{{ call['email'] or '—' }}</td>
@@ -94,9 +114,9 @@
                     <td>{{ call['address'] or '—' }}</td>
                     <td style="white-space:pre-wrap">{{ call['notes'] or '—' }}</td>
                     <td>
-                      <div class="btn-row">
-                        <a href="/edit_call/{{ call['id'] }}" class="btn" style="padding:6px 10px;font-size:14px;width:auto">Edit</a>
-                        <a href="/delete_call/{{ call['id'] }}" class="btn" style="padding:6px 10px;font-size:14px;width:auto;background:#cc0000"
+                      <div class="row-actions">
+                        <a href="/edit_call/{{ call['id'] }}" class="btn sm ghost">Edit</a>
+                        <a href="/delete_call/{{ call['id'] }}" class="btn sm primary"
                            onclick="return confirm('Are you sure?')">Delete</a>
                       </div>
                     </td>
@@ -107,43 +127,56 @@
           </table>
         </div>
       </section>
-    </div>
+    </main>
   </div>
 
-  <!-- Modal: Log New Call (uses global .modal/.modal-content styles) -->
+  <!-- Modal: CLEAN Add Cold Call form -->
   <div class="modal" id="callModal" aria-hidden="true">
-    <div class="modal-content">
-      <button class="close" type="button" onclick="closeModal()">×</button>
-      <h2>Log a New Cold Call</h2>
-      <form action="/add" method="POST" class="grid-form">
-        <div class="form-group">
-          <label for="company">Company</label>
-          <input id="company" type="text" name="company" required />
-        </div>
-        <div class="form-group">
-          <label for="contact_name">Contact Name</label>
-          <input id="contact_name" type="text" name="contact_name" />
-        </div>
-        <div class="form-group">
-          <label for="phone">Phone</label>
-          <input id="phone" type="text" name="phone" />
-        </div>
-        <div class="form-group">
-          <label for="email">Email</label>
-          <input id="email" type="email" name="email" />
-        </div>
-        <div class="form-group full">
-          <label for="address">Address</label>
-          <input id="address" type="text" name="address" />
-        </div>
-        <div class="form-group full">
-          <label for="notes">Notes</label>
-          <textarea id="notes" name="notes" rows="3"></textarea>
-        </div>
-        <div class="form-group full">
-          <button type="submit" class="btn">Add Call</button>
-        </div>
-      </form>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="newCallTitle">
+      <div class="head">
+        <h2 id="newCallTitle" class="mt-0 mb-0">Log a New Cold Call</h2>
+        <button class="btn icon ghost" type="button" aria-label="Close" onclick="closeModal()">✕</button>
+      </div>
+
+      <div class="body">
+        <!-- vertical, tidy fields; 2 cols desktop / 1 col mobile -->
+        <form id="newcall-form" action="/add" method="POST" class="form form-vertical">
+          <div class="form-grid">
+            <div class="field col-6">
+              <label class="label" for="company">Company <span class="subtle">(required)</span></label>
+              <input id="company" class="input" type="text" name="company" required placeholder="Acme Manufacturing">
+            </div>
+            <div class="field col-6">
+              <label class="label" for="contact_name">Contact Name</label>
+              <input id="contact_name" class="input" type="text" name="contact_name" placeholder="Jane Smith">
+            </div>
+
+            <div class="field col-6">
+              <label class="label" for="phone">Phone</label>
+              <input id="phone" class="input" type="tel" inputmode="tel" name="phone" placeholder="(317) 555-0199">
+            </div>
+            <div class="field col-6">
+              <label class="label" for="email">Email</label>
+              <input id="email" class="input" type="email" name="email" placeholder="jane@acme.com">
+            </div>
+
+            <div class="field col-12">
+              <label class="label" for="address">Address</label>
+              <input id="address" class="input" type="text" name="address" placeholder="123 Commerce Dr, Indianapolis IN">
+            </div>
+
+            <div class="field col-12">
+              <label class="label" for="notes">Notes</label>
+              <textarea id="notes" class="textarea" name="notes" rows="4" placeholder="Left voicemail…"></textarea>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="foot">
+        <button class="btn" type="button" onclick="closeModal()">Cancel</button>
+        <button class="btn primary" form="newcall-form" type="submit">Add Call</button>
+      </div>
     </div>
   </div>
 
