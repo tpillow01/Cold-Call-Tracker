@@ -8,27 +8,20 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
   <script>
-    // Month group toggle
-    function toggleMonth(month){
-      const key = month.replace(/\s/g,'-');
-      document.querySelectorAll(`.month-${key}`).forEach(r=>{
-        r.style.display = (r.style.display === 'table-row') ? 'none' : 'table-row';
-      });
-    }
-    // Modal controls
+    // --- Modal helpers ---
     function openModal(){ document.getElementById('callModal').classList.add('open'); }
     function closeModal(){ document.getElementById('callModal').classList.remove('open'); }
   </script>
 </head>
 <body>
 
-  <!-- Top Bar (trimmed nav) -->
+  <!-- Clean Header -->
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand-wrap">
-        <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
+        <img src="{{ url_for('static, filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
         <div class="brand-title">Cold Call Tracker</div>
-        <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
+        <img src="{{ url_for('static, filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
       </div>
       <nav class="topnav">
         <a href="/">Dashboard</a>
@@ -38,7 +31,6 @@
     </div>
   </header>
 
-  <!-- Shell layout -->
   <div class="shell">
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -59,16 +51,25 @@
 
     <!-- Main -->
     <main>
+
+      <!-- Mobile-friendly sticky search -->
+      <section class="toolbar sticky-mobile" aria-label="Filter past calls">
+        <input id="callSearch" class="input searchbar" type="search" inputmode="search"
+               enterkeyhint="search" autocapitalize="off" autocomplete="off"
+               placeholder="Search company, contact, email, phone…" />
+        <button class="btn ghost" type="button" id="clearSearch">Clear</button>
+      </section>
+
       <!-- Reminders -->
       <section class="panel">
         <h2 class="section-title">Reminders</h2>
         <div class="reminders">
           {% if reminders %}
-            {% for reminder in reminders %}
+            {% for r in reminders %}
               <div class="rem-card">
-                <h3>{{ reminder['company'] }}</h3>
-                <div class="k">Last contacted: {{ reminder['days_ago'] }} days ago</div>
-                <div class="k">Suggested Action: <strong>{{ reminder['action'] }}</strong></div>
+                <h3>{{ r['company'] }}</h3>
+                <div class="k">Last contacted: {{ r['days_ago'] }} days ago</div>
+                <div class="k">Suggested Action: <strong>{{ r['action'] }}</strong></div>
               </div>
             {% endfor %}
           {% else %}
@@ -86,7 +87,11 @@
 
       <!-- Past Cold Calls -->
       <section class="panel mt-16">
-        <h2 class="section-title">Past Cold Calls</h2>
+        <div class="section-head">
+          <h2 class="section-title">Past Cold Calls</h2>
+          <div class="subtle" id="matchCount" aria-live="polite"></div>
+        </div>
+
         <div class="table-wrap">
           <table>
             <thead>
@@ -100,24 +105,59 @@
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody>
+
+            <tbody id="callsBody">
               {% for month, calls in calls_by_month.items() %}
-                <tr class="month-header" style="cursor:pointer;background:#171b22" onclick="toggleMonth('{{ month }}')">
-                  <td colspan="7" style="font-weight:800">{{ month }}</td>
+                <!-- Month header with chevron and count -->
+                <tr class="month-header touch-target"
+                    data-month="{{ month }}"
+                    id="mhead-{{ month.replace(' ', '-') }}">
+                  <td colspan="7" style="font-weight:800">
+                    <span class="chev">▸</span>
+                    <span class="mh-label">{{ month }}</span>
+                    <span class="mh-count" aria-hidden="true"></span>
+                  </td>
                 </tr>
+
                 {% for call in calls %}
-                  <tr class="month-{{ month.replace(' ', '-') }}" style="display:none;">
-                    <td>{{ call['company'] }}</td>
-                    <td>{{ call['contact_name'] or '—' }}</td>
-                    <td>{{ call['email'] or '—' }}</td>
-                    <td>{{ call['phone'] or '—' }}</td>
-                    <td>{{ call['address'] or '—' }}</td>
-                    <td style="white-space:pre-wrap">{{ call['notes'] or '—' }}</td>
-                    <td>
+                  <tr
+                    class="call-row month-{{ month.replace(' ', '-') }}"
+                    data-month-key="{{ month.replace(' ', '-') }}"
+                    data-company="{{ (call['company'] or '')|e }}"
+                    data-contact="{{ (call['contact_name'] or '')|e }}"
+                    data-email="{{ (call['email'] or '')|e }}"
+                    data-phone="{{ (call['phone'] or '')|e }}"
+                    data-address="{{ (call['address'] or '')|e }}"
+                    data-date="{{ call['date_called'] }}"
+                    style="display:none;"
+                  >
+                    <td data-label="Company">
+                      <strong>{{ call['company'] }}</strong>
+                    </td>
+                    <td data-label="Contact Name">{{ call['contact_name'] or '—' }}</td>
+                    <td data-label="Email">{{ call['email'] or '—' }}</td>
+                    <td data-label="Phone">{{ call['phone'] or '—' }}</td>
+                    <td data-label="Address">{{ call['address'] or '—' }}</td>
+                    <td data-label="Notes" style="white-space:pre-wrap">{{ call['notes'] or '—' }}</td>
+                    <td data-label="Actions">
                       <div class="row-actions">
                         <a href="/edit_call/{{ call['id'] }}" class="btn sm ghost">Edit</a>
                         <a href="/delete_call/{{ call['id'] }}" class="btn sm primary"
                            onclick="return confirm('Are you sure?')">Delete</a>
+                      </div>
+
+                      <!-- Mobile quick chips -->
+                      <div class="mobile-quickchips">
+                        {% if call['phone'] %}
+                          <a class="chip" href="tel:{{ call['phone'] }}">Call</a>
+                          <a class="chip" href="sms:{{ call['phone'] }}">Text</a>
+                        {% endif %}
+                        {% if call['email'] %}
+                          <a class="chip" href="mailto:{{ call['email'] }}">Email</a>
+                        {% endif %}
+                        {% if call['address'] %}
+                          <a class="chip map-link" href="#" data-address="{{ (call['address'] or '')|e }}">Map</a>
+                        {% endif %}
                       </div>
                     </td>
                   </tr>
@@ -130,49 +170,43 @@
     </main>
   </div>
 
-  <!-- Modal: CLEAN Add Cold Call form -->
+  <!-- Add Call Modal -->
   <div class="modal" id="callModal" aria-hidden="true">
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="newCallTitle">
       <div class="head">
         <h2 id="newCallTitle" class="mt-0 mb-0">Log a New Cold Call</h2>
         <button class="btn icon ghost" type="button" aria-label="Close" onclick="closeModal()">✕</button>
       </div>
-
       <div class="body">
-        <!-- vertical, tidy fields; 2 cols desktop / 1 col mobile -->
-        <form id="newcall-form" action="/add" method="POST" class="form form-vertical">
+        <form id="newcall-form" action="/add" method="POST" class="form form-vertical" autocomplete="on">
           <div class="form-grid">
             <div class="field col-6">
               <label class="label" for="company">Company <span class="subtle">(required)</span></label>
-              <input id="company" class="input" type="text" name="company" required placeholder="Acme Manufacturing">
+              <input id="company" class="input" type="text" name="company" required placeholder="Acme Manufacturing" autocomplete="organization">
             </div>
             <div class="field col-6">
               <label class="label" for="contact_name">Contact Name</label>
-              <input id="contact_name" class="input" type="text" name="contact_name" placeholder="Jane Smith">
+              <input id="contact_name" class="input" type="text" name="contact_name" placeholder="Jane Smith" autocomplete="name">
             </div>
-
             <div class="field col-6">
               <label class="label" for="phone">Phone</label>
-              <input id="phone" class="input" type="tel" inputmode="tel" name="phone" placeholder="(317) 555-0199">
+              <input id="phone" class="input" type="tel" inputmode="tel" name="phone" placeholder="(317) 555-0199" autocomplete="tel">
             </div>
             <div class="field col-6">
               <label class="label" for="email">Email</label>
-              <input id="email" class="input" type="email" name="email" placeholder="jane@acme.com">
+              <input id="email" class="input" type="email" name="email" placeholder="jane@acme.com" autocomplete="email">
             </div>
-
             <div class="field col-12">
               <label class="label" for="address">Address</label>
-              <input id="address" class="input" type="text" name="address" placeholder="123 Commerce Dr, Indianapolis IN">
+              <input id="address" class="input" type="text" name="address" placeholder="123 Commerce Dr, Indianapolis IN" autocomplete="street-address">
             </div>
-
             <div class="field col-12">
               <label class="label" for="notes">Notes</label>
-              <textarea id="notes" class="textarea" name="notes" rows="4" placeholder="Left voicemail…"></textarea>
+              <textarea id="notes" class="textarea" name="notes" rows="4" placeholder="Left voicemail…" autocomplete="off"></textarea>
             </div>
           </div>
         </form>
       </div>
-
       <div class="foot">
         <button class="btn" type="button" onclick="closeModal()">Cancel</button>
         <button class="btn primary" form="newcall-form" type="submit">Add Call</button>
@@ -180,11 +214,110 @@
     </div>
   </div>
 
+  <!-- Mobile bottom dock -->
+  <nav class="mobile-dock" aria-label="Primary">
+    <a class="dock-btn" href="/">Dashboard</a>
+    <button class="dock-btn primary" type="button" onclick="openModal()">Log Call</button>
+    <a class="dock-btn" href="/schedule">Schedule</a>
+  </nav>
+
+  <!-- Optional FAB for quick logging on phones -->
+  <button class="fab" type="button" aria-label="Log Call" onclick="openModal()">＋</button>
+
   <script>
+    // ===== Month accordion with persistence =====
+    const closedKey = 'cc_closedMonths';
+    function getClosedSet(){
+      try{ return new Set(JSON.parse(localStorage.getItem(closedKey) || '[]')); }
+      catch{ return new Set(); }
+    }
+    function saveClosedSet(set){
+      localStorage.setItem(closedKey, JSON.stringify(Array.from(set)));
+    }
+    const closed = getClosedSet();
+
+    function setMonthState(monthSlug, open){
+      const rows = document.querySelectorAll(`.month-${monthSlug}`);
+      rows.forEach(r => r.style.display = open ? 'table-row' : 'none');
+      const head = document.getElementById(`mhead-${monthSlug}`);
+      if (head){
+        const chev = head.querySelector('.chev');
+        if (chev) chev.textContent = open ? '▾' : '▸';
+      }
+      if (!open) closed.add(monthSlug); else closed.delete(monthSlug);
+      saveClosedSet(closed);
+    }
+
+    // initialize accordions + counts
+    document.querySelectorAll('.month-header').forEach(h=>{
+      const month = h.dataset.month;
+      const slug = month.replace(/\s/g,'-');
+      // Count rows for this month
+      const count = document.querySelectorAll(`.month-${slug}`).length;
+      const badge = h.querySelector('.mh-count');
+      if (badge){ badge.textContent = `· ${count}`; }
+
+      // Start collapsed unless user opened it previously
+      const open = !closed.has(slug);
+      setMonthState(slug, open);
+
+      h.addEventListener('click', ()=> {
+        const nowOpen = document.querySelector(`.month-${slug}`)?.style.display !== 'none';
+        setMonthState(slug, !nowOpen);
+      }, {passive:true});
+    });
+
+    // widen tap target on mobile
+    document.querySelectorAll('.touch-target').forEach(h => h.style.cursor = 'pointer');
+
+    // ===== Live filter (mobile-first) =====
+    const input = document.getElementById('callSearch');
+    const clearBtn = document.getElementById('clearSearch');
+    const matchCount = document.getElementById('matchCount');
+    const allRows = Array.from(document.querySelectorAll('tbody tr.call-row'));
+
+    function expandAllMonths(){
+      document.querySelectorAll('.month-header').forEach(h=>{
+        const slug = h.dataset.month.replace(/\s/g,'-');
+        setMonthState(slug, true);
+      });
+    }
+
+    function filterCalls(){
+      const q = (input.value || '').trim().toLowerCase();
+      let matches = 0;
+
+      if (q) expandAllMonths();
+
+      allRows.forEach(row => {
+        const hay = ((row.dataset.company||'')+' '+(row.dataset.contact||'')+' '+(row.dataset.email||'')+' '+(row.dataset.phone||'')+' '+(row.dataset.address||'')).toLowerCase();
+        const show = !q || hay.includes(q);
+        row.style.display = show ? 'table-row' : 'none';
+        if (show) matches++;
+      });
+
+      matchCount.textContent = q ? `${matches} match${matches===1?'':'es'}` : '';
+    }
+    input.addEventListener('input', filterCalls, {passive:true});
+    clearBtn.addEventListener('click', ()=>{ input.value=''; filterCalls(); input.focus(); });
+
+    // Enter key should not submit anything
+    input.addEventListener('keydown', e=>{ if (e.key === 'Enter') e.preventDefault(); });
+
+    // ===== Map link encoding (mobile quick chips) =====
+    document.querySelectorAll('.map-link').forEach(a=>{
+      a.addEventListener('click', e=>{
+        e.preventDefault();
+        const addr = a.dataset.address || '';
+        if (!addr.trim()) return;
+        const url = 'https://www.google.com/maps?q=' + encodeURIComponent(addr);
+        window.open(url, '_blank');
+      });
+    });
+
+    // Service worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/static/sw.js')
-        .then(() => console.log('✅ Service Worker Registered'))
-        .catch(err => console.error('❌ Service Worker Error:', err));
+      navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
     }
   </script>
 </body>
