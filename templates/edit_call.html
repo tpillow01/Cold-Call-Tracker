@@ -7,73 +7,106 @@
   <meta name="theme-color" content="#cc0000" />
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
-  <style>
-    /* tiny helper just for the button row */
-    .btn-row{display:flex; gap:12px; justify-content:space-between; flex-wrap:wrap}
-  </style>
 </head>
 <body>
-  <!-- Top bar -->
-  <div class="top-header">
-    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan logo" />
-    <h1>Edit Cold Call</h1>
-    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI logo" />
-  </div>
 
-  <!-- Main -->
-  <main class="main-layout">
-    <div class="content">
-      <section class="card">
-        <h2>Edit Cold Call</h2>
+  <!-- Clean Header (same as other pages) -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-wrap">
+        <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
+        <div class="brand-title">Cold Call Tracker</div>
+        <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
+      </div>
+      <nav class="topnav">
+        <a href="/">Dashboard</a>
+        <a href="/schedule">Schedule</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </div>
+  </header>
 
-        <form method="POST" class="grid-form" autocomplete="on">
-          <div class="form-group">
-            <label for="company">Company</label>
-            <input id="company" type="text" name="company" value="{{ call['company'] }}" required />
-          </div>
+  <div class="shell">
+    <!-- Sidebar (consistent) -->
+    <aside class="sidebar">
+      <div class="sb-title">MENU</div>
+      <div class="sb-nav">
+        <a class="sb-btn" href="/">Dashboard</a>
+        <a class="sb-btn" href="/schedule">📅 Schedule</a>
+        <a class="sb-btn" href="/logout">Logout</a>
+      </div>
+      <div class="sb-legend">
+        <div class="legend-item"><span class="legend-dot red"></span> Follow-up overdue</div>
+        <div class="legend-item"><span class="legend-dot gray"></span> Due today</div>
+      </div>
+    </aside>
 
-          <div class="form-group">
-            <label for="contact_name">Contact Name</label>
-            <input id="contact_name" type="text" name="contact_name" value="{{ call['contact_name'] or '' }}" />
-          </div>
+    <!-- Main -->
+    <main>
+      <section class="panel">
+        <h2 class="section-title">Edit Cold Call</h2>
 
-          <div class="form-group">
-            <label for="phone">Phone</label>
-            <input id="phone" type="text" name="phone" value="{{ call['phone'] or '' }}" />
-          </div>
-
-          <div class="form-group">
-            <label for="email">Email</label>
-            <input id="email" type="email" name="email" value="{{ call['email'] or '' }}" />
-          </div>
-
-          <div class="form-group full">
-            <label for="address">Address</label>
-            <input id="address" type="text" name="address" value="{{ call['address'] or '' }}" />
-          </div>
-
-          <div class="form-group full">
-            <label for="notes">Notes</label>
-            <textarea id="notes" name="notes" rows="4">{{ call['notes'] or '' }}</textarea>
-          </div>
-
-          <div class="form-group full">
-            <div class="btn-row">
-              <button type="submit" class="btn">💾 Save</button>
-              <a class="btn outline" href="/delete_call/{{ call['id'] }}" onclick="return confirm('Delete this call?')">🗑 Delete</a>
-              <a class="btn-logout" href="{{ url_for('index') }}" style="width:auto">Cancel</a>
+        <!-- Same form structure/classes as Log New Call / Add Event -->
+        <form method="POST" class="form form-vertical" autocomplete="on">
+          <div class="form-grid">
+            <div class="field col-6">
+              <label class="label" for="company">Company <span class="subtle">(required)</span></label>
+              <input id="company" class="input" type="text" name="company"
+                     value="{{ call['company'] }}" required
+                     placeholder="Acme Manufacturing" autocomplete="organization">
             </div>
+
+            <div class="field col-6">
+              <label class="label" for="contact_name">Contact Name</label>
+              <input id="contact_name" class="input" type="text" name="contact_name"
+                     value="{{ call['contact_name'] or '' }}"
+                     placeholder="Jane Smith" autocomplete="name">
+            </div>
+
+            <div class="field col-6">
+              <label class="label" for="phone">Phone</label>
+              <input id="phone" class="input" type="tel" inputmode="tel" name="phone"
+                     value="{{ call['phone'] or '' }}"
+                     placeholder="(317) 555-0199" autocomplete="tel">
+            </div>
+
+            <div class="field col-6">
+              <label class="label" for="email">Email</label>
+              <input id="email" class="input" type="email" name="email"
+                     value="{{ call['email'] or '' }}"
+                     placeholder="jane@acme.com" autocomplete="email">
+            </div>
+
+            <div class="field col-12">
+              <label class="label" for="address">Address</label>
+              <input id="address" class="input" type="text" name="address"
+                     value="{{ call['address'] or '' }}"
+                     placeholder="123 Commerce Dr, Indianapolis IN" autocomplete="street-address">
+            </div>
+
+            <div class="field col-12">
+              <label class="label" for="notes">Notes</label>
+              <textarea id="notes" class="textarea" name="notes" rows="4"
+                        placeholder="Conversation details, next steps…">{{ call['notes'] or '' }}</textarea>
+            </div>
+          </div>
+
+          <!-- Foot buttons (same placement/weighting as modals) -->
+          <div class="btn-row" style="margin-top:12px; justify-content:flex-end; gap:10px">
+            <a class="btn" href="{{ url_for('index') }}">Cancel</a>
+            <a class="btn" href="/delete_call/{{ call['id'] }}"
+               onclick="return confirm('Delete this call?')"
+               style="background:#c94242;border-color:#c94242;color:#fff">Delete</a>
+            <button type="submit" class="btn primary">Save</button>
           </div>
         </form>
       </section>
-    </div>
-  </main>
+    </main>
+  </div>
 
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/static/sw.js')
-        .then(() => console.log('✅ Service Worker Registered'))
-        .catch(err => console.error('❌ Service Worker Error:', err));
+      navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
     }
   </script>
 </body>

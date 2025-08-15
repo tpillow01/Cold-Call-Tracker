@@ -412,3 +412,20 @@ tbody tr:hover td{background:#121821}
 
 /* Keep FAB above dock on phones */
 .fab{ bottom:80px }
+/* ==== Mobile UX simplifications ==== */
+
+/* Ensure the main document scrolls naturally */
+html, body { overflow-y:auto }
+
+/* Calendar: no forced min-width wrappers; grid fills the screen */
+.calendar .cal-head { position:sticky; top:60px; z-index:5 } /* keep header controls handy on phones */
+@media (max-width: 820px){
+  .weekday { font-size:.85rem; padding:8px 4px }
+  .day { height:128px; padding:10px 8px }
+}
+@media (max-width: 480px){
+  .day { height:110px; padding:8px 6px }
+}
+
+/* Remove space for previously-used bottom dock/FAB if any were present */
+.fab, .mobile-dock { display:none !important }

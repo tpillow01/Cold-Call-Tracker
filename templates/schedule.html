@@ -10,7 +10,7 @@
 </head>
 <body>
 
-  <!-- Clean Header -->
+  <!-- Header -->
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand-wrap">
@@ -54,25 +54,12 @@
           </div>
         </div>
 
-        <!-- NEW: Month / Agenda toggle (great on phones) -->
-        <div class="view-toggle" role="tablist" aria-label="Calendar view">
-          <button id="btnMonth" class="seg active" type="button" aria-selected="true">Month</button>
-          <button id="btnAgenda" class="seg" type="button" aria-selected="false">Agenda</button>
+        <div class="weekday-bar">
+          <div class="weekday">Sun</div><div class="weekday">Mon</div><div class="weekday">Tue</div>
+          <div class="weekday">Wed</div><div class="weekday">Thu</div><div class="weekday">Fri</div><div class="weekday">Sat</div>
         </div>
 
-        <!-- Month view -->
-        <div class="cal-scroll" id="monthWrap" style="overflow-x:auto;padding-bottom:6px">
-          <div class="cal-inner" id="swipeArea" style="min-width:920px">
-            <div class="weekday-bar">
-              <div class="weekday">Sun</div><div class="weekday">Mon</div><div class="weekday">Tue</div>
-              <div class="weekday">Wed</div><div class="weekday">Thu</div><div class="weekday">Fri</div><div class="weekday">Sat</div>
-            </div>
-            <div class="calendar-grid" id="calGrid" data-year="{{ year }}" data-month="{{ month }}"></div>
-          </div>
-        </div>
-
-        <!-- Agenda (list) view -->
-        <div id="agendaView" class="agenda hidden" aria-live="polite"></div>
+        <div class="calendar-grid" id="calGrid" data-year="{{ year }}" data-month="{{ month }}"></div>
       </section>
     </main>
   </div>
@@ -103,19 +90,19 @@
           <div class="form-grid">
             <div class="field col-6">
               <label class="label" for="evt_date">Date</label>
-              <input id="evt_date" class="input" type="date" name="date" required autocomplete="off">
+              <input id="evt_date" class="input" type="date" name="date" required>
             </div>
             <div class="field col-6">
               <label class="label" for="evt_time">Time</label>
-              <input id="evt_time" class="input" type="time" name="time" autocomplete="off">
+              <input id="evt_time" class="input" type="time" name="time">
             </div>
             <div class="field col-12">
               <label class="label" for="evt_title">Title</label>
-              <input id="evt_title" class="input" type="text" name="title" placeholder="Follow-up call with Acme" required autocomplete="organization-title">
+              <input id="evt_title" class="input" type="text" name="title" placeholder="Follow-up call with Acme" required>
             </div>
             <div class="field col-12">
               <label class="label" for="evt_notes">Notes</label>
-              <textarea id="evt_notes" class="textarea" name="notes" rows="3" placeholder="Key points for the call…" autocomplete="off"></textarea>
+              <textarea id="evt_notes" class="textarea" name="notes" rows="3" placeholder="Key points for the call…"></textarea>
             </div>
             <div class="field col-12">
               <label class="label" for="evt_type">Type</label>
@@ -135,23 +122,13 @@
     </div>
   </div>
 
-  <!-- Mobile bottom dock -->
-  <nav class="mobile-dock" aria-label="Primary">
-    <a class="dock-btn" href="/">Dashboard</a>
-    <button class="dock-btn primary" type="button" onclick="document.getElementById('newEventModal').classList.add('open')">Add Event</button>
-    <a class="dock-btn" href="/schedule">Schedule</a>
-  </nav>
-
-  <!-- Floating Action Button (mobile-friendly quick add) -->
-  <button class="fab" type="button" aria-label="Add Event" onclick="document.getElementById('newEventModal').classList.add('open')">＋</button>
-
-  <!-- Events JSON for JS -->
+  <!-- Events JSON -->
   <script id="events-json" type="application/json">
     {{ event_map | tojson }}
   </script>
 
   <script>
-    // ===== Calendar / Agenda logic =====
+    // ===== Month calendar (compact & mobile-friendly) =====
     const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const grid = document.getElementById('calGrid');
     let y = parseInt(grid.dataset.year || new Date().getFullYear(), 10);
@@ -162,12 +139,6 @@
     const dayModal = document.getElementById('dayModal');
     const dayBody  = document.getElementById('dayBody');
     const dayTitle = document.getElementById('dayTitle');
-
-    const monthWrap = document.getElementById('monthWrap');
-    const agendaView = document.getElementById('agendaView');
-    const btnMonth = document.getElementById('btnMonth');
-    const btnAgenda = document.getElementById('btnAgenda');
-
     const MAX_CHIPS = 3;
 
     function pad(n){ return String(n).padStart(2,'0'); }
@@ -245,105 +216,20 @@
       grid.appendChild(frag);
     }
 
-    function buildAgenda(year, month){
-      // Build a simple list of days that have events, sorted asc
-      const total = daysInMonth(year, month);
-      const items = [];
-      for(let d=1; d<=total; d++){
-        const iso = `${year}-${pad(month)}-${pad(d)}`;
-        const list = events[iso] || [];
-        if(list.length){
-          items.push({ iso, day: d, events: list });
-        }
-      }
-
-      titleEl.textContent = `${monthNames[month-1]} ${year}`;
-      if(items.length === 0){
-        agendaView.innerHTML = `<div class="agenda-empty">No events this month.</div>`;
-        return;
-      }
-
-      agendaView.innerHTML = items.map(({iso,day,events})=>{
-        const nice = `${monthNames[month-1]} ${day}, ${year}`;
-        const rows = events.map(e => `
-          <div class="agenda-item ${e.type ? e.type : 'call'}">
-            <div class="agenda-time">${e.time || ''}</div>
-            <div class="agenda-main">
-              <div class="agenda-title">${e.title}</div>
-              ${e.notes ? `<div class="agenda-notes">${e.notes}</div>` : ""}
-            </div>
-          </div>
-        `).join("");
-        return `
-          <div class="agenda-day">
-            <div class="agenda-date">${nice}</div>
-            <div class="agenda-list">${rows}</div>
-          </div>
-        `;
-      }).join("");
-    }
-
     function navigate(delta){
       m += delta;
       if (m <= 0){ m = 12; y -= 1; }
       if (m > 12){ m = 1; y += 1; }
       drawCalendar(y, m);
-      if (!agendaView.classList.contains('hidden')) buildAgenda(y, m);
     }
 
-    // Toggle handlers
-    function setView(view){
-      if(view === 'agenda'){
-        monthWrap.classList.add('hidden');
-        agendaView.classList.remove('hidden');
-        btnMonth.classList.remove('active'); btnMonth.setAttribute('aria-selected','false');
-        btnAgenda.classList.add('active');   btnAgenda.setAttribute('aria-selected','true');
-        buildAgenda(y, m);
-        localStorage.setItem('cc_view','agenda');
-      }else{
-        agendaView.classList.add('hidden');
-        monthWrap.classList.remove('hidden');
-        btnAgenda.classList.remove('active'); btnAgenda.setAttribute('aria-selected','false');
-        btnMonth.classList.add('active');     btnMonth.setAttribute('aria-selected','true');
-        localStorage.setItem('cc_view','month');
-      }
-    }
-
-    btnMonth.addEventListener('click',()=>setView('month'));
-    btnAgenda.addEventListener('click',()=>setView('agenda'));
-
-    // Swipe navigation for month view (mobile friendly)
-    (function addSwipe(){
-      const el = document.getElementById('swipeArea');
-      let startX = null, startY = null;
-      el.addEventListener('touchstart', e=>{
-        const t = e.changedTouches[0]; startX = t.clientX; startY = t.clientY;
-      }, {passive:true});
-      el.addEventListener('touchend', e=>{
-        if(startX===null) return;
-        const t = e.changedTouches[0];
-        const dx = t.clientX - startX; const dy = Math.abs(t.clientY - startY);
-        if (Math.abs(dx) > 50 && dy < 60){ navigate(dx < 0 ? 1 : -1); }
-        startX = startY = null;
-      }, {passive:true});
-    })();
-
-    // Init
     document.getElementById('prevBtn').addEventListener('click', ()=>navigate(-1));
     document.getElementById('nextBtn').addEventListener('click', ()=>navigate(1));
     document.getElementById('todayBtn').addEventListener('click', ()=>{
-      const d = new Date(); y = d.getFullYear(); m = d.getMonth()+1; drawCalendar(y, m); if(!agendaView.classList.contains('hidden')) buildAgenda(y, m);
+      const d = new Date(); y = d.getFullYear(); m = d.getMonth()+1; drawCalendar(y, m);
     });
 
     drawCalendar(y, m);
-
-    // Default to Agenda on small screens, remember choice
-    const pref = localStorage.getItem('cc_view');
-    if (pref === 'agenda' || (pref === null && window.innerWidth < 720)) {
-      setView('agenda');
-    } else {
-      setView('month');
-    }
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/static/sw.js').catch(()=>{});

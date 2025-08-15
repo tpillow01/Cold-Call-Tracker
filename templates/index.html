@@ -8,14 +8,13 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
   <script>
-    // --- Modal helpers ---
     function openModal(){ document.getElementById('callModal').classList.add('open'); }
     function closeModal(){ document.getElementById('callModal').classList.remove('open'); }
   </script>
 </head>
 <body>
 
-  <!-- Clean Header -->
+  <!-- Header -->
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand-wrap">
@@ -49,16 +48,8 @@
       <div class="subtle">Welcome, <strong>{{ user }}</strong></div>
     </aside>
 
-    <!-- Main -->
+    <!-- Main content (scrolls naturally) -->
     <main>
-
-      <!-- Mobile-friendly sticky search -->
-      <section class="toolbar sticky-mobile" aria-label="Filter past calls">
-        <input id="callSearch" class="input searchbar" type="search" inputmode="search"
-               enterkeyhint="search" autocapitalize="off" autocomplete="off"
-               placeholder="Search company, contact, email, phone…" />
-        <button class="btn ghost" type="button" id="clearSearch">Clear</button>
-      </section>
 
       <!-- Reminders -->
       <section class="panel">
@@ -89,7 +80,14 @@
       <section class="panel mt-16">
         <div class="section-head">
           <h2 class="section-title">Past Cold Calls</h2>
-          <div class="subtle" id="matchCount" aria-live="polite"></div>
+          <!-- Search bar sits directly above the table -->
+          <div class="toolbar" aria-label="Filter past calls" style="margin-top:8px">
+            <input id="callSearch" class="input searchbar" type="search" inputmode="search"
+                   enterkeyhint="search" autocapitalize="off" autocomplete="off"
+                   placeholder="Search company, contact, email, phone…" />
+            <button class="btn ghost" type="button" id="clearSearch">Clear</button>
+            <div class="right subtle" id="matchCount" aria-live="polite"></div>
+          </div>
         </div>
 
         <div class="table-wrap">
@@ -105,20 +103,15 @@
                 <th>Actions</th>
               </tr>
             </thead>
-
             <tbody id="callsBody">
               {% for month, calls in calls_by_month.items() %}
-                <!-- Month header with chevron and count -->
-                <tr class="month-header touch-target"
-                    data-month="{{ month }}"
-                    id="mhead-{{ month.replace(' ', '-') }}">
+                <tr class="month-header touch-target" data-month="{{ month }}" id="mhead-{{ month.replace(' ', '-') }}">
                   <td colspan="7" style="font-weight:800">
                     <span class="chev">▸</span>
                     <span class="mh-label">{{ month }}</span>
                     <span class="mh-count" aria-hidden="true"></span>
                   </td>
                 </tr>
-
                 {% for call in calls %}
                   <tr
                     class="call-row month-{{ month.replace(' ', '-') }}"
@@ -131,9 +124,7 @@
                     data-date="{{ call['date_called'] }}"
                     style="display:none;"
                   >
-                    <td data-label="Company">
-                      <strong>{{ call['company'] }}</strong>
-                    </td>
+                    <td data-label="Company"><strong>{{ call['company'] }}</strong></td>
                     <td data-label="Contact Name">{{ call['contact_name'] or '—' }}</td>
                     <td data-label="Email">{{ call['email'] or '—' }}</td>
                     <td data-label="Phone">{{ call['phone'] or '—' }}</td>
@@ -142,22 +133,7 @@
                     <td data-label="Actions">
                       <div class="row-actions">
                         <a href="/edit_call/{{ call['id'] }}" class="btn sm ghost">Edit</a>
-                        <a href="/delete_call/{{ call['id'] }}" class="btn sm primary"
-                           onclick="return confirm('Are you sure?')">Delete</a>
-                      </div>
-
-                      <!-- Mobile quick chips -->
-                      <div class="mobile-quickchips">
-                        {% if call['phone'] %}
-                          <a class="chip" href="tel:{{ call['phone'] }}">Call</a>
-                          <a class="chip" href="sms:{{ call['phone'] }}">Text</a>
-                        {% endif %}
-                        {% if call['email'] %}
-                          <a class="chip" href="mailto:{{ call['email'] }}">Email</a>
-                        {% endif %}
-                        {% if call['address'] %}
-                          <a class="chip map-link" href="#" data-address="{{ (call['address'] or '')|e }}">Map</a>
-                        {% endif %}
+                        <a href="/delete_call/{{ call['id'] }}" class="btn sm primary" onclick="return confirm('Are you sure?')">Delete</a>
                       </div>
                     </td>
                   </tr>
@@ -214,26 +190,11 @@
     </div>
   </div>
 
-  <!-- Mobile bottom dock -->
-  <nav class="mobile-dock" aria-label="Primary">
-    <a class="dock-btn" href="/">Dashboard</a>
-    <button class="dock-btn primary" type="button" onclick="openModal()">Log Call</button>
-    <a class="dock-btn" href="/schedule">Schedule</a>
-  </nav>
-
-  <!-- Optional FAB for quick logging on phones -->
-  <button class="fab" type="button" aria-label="Log Call" onclick="openModal()">＋</button>
-
   <script>
     // ===== Month accordion with persistence =====
     const closedKey = 'cc_closedMonths';
-    function getClosedSet(){
-      try{ return new Set(JSON.parse(localStorage.getItem(closedKey) || '[]')); }
-      catch{ return new Set(); }
-    }
-    function saveClosedSet(set){
-      localStorage.setItem(closedKey, JSON.stringify(Array.from(set)));
-    }
+    function getClosedSet(){ try{ return new Set(JSON.parse(localStorage.getItem(closedKey) || '[]')); } catch{ return new Set(); } }
+    function saveClosedSet(set){ localStorage.setItem(closedKey, JSON.stringify(Array.from(set))); }
     const closed = getClosedSet();
 
     function setMonthState(monthSlug, open){
@@ -252,25 +213,19 @@
     document.querySelectorAll('.month-header').forEach(h=>{
       const month = h.dataset.month;
       const slug = month.replace(/\s/g,'-');
-      // Count rows for this month
       const count = document.querySelectorAll(`.month-${slug}`).length;
       const badge = h.querySelector('.mh-count');
       if (badge){ badge.textContent = `· ${count}`; }
-
-      // Start collapsed unless user opened it previously
       const open = !closed.has(slug);
       setMonthState(slug, open);
-
       h.addEventListener('click', ()=> {
-        const nowOpen = document.querySelector(`.month-${slug}`)?.style.display !== 'none';
+        const firstRow = document.querySelector(`.month-${slug}`);
+        const nowOpen = firstRow && firstRow.style.display !== 'none';
         setMonthState(slug, !nowOpen);
       }, {passive:true});
     });
 
-    // widen tap target on mobile
-    document.querySelectorAll('.touch-target').forEach(h => h.style.cursor = 'pointer');
-
-    // ===== Live filter (mobile-first) =====
+    // ===== Live filter (search just above Past Calls) =====
     const input = document.getElementById('callSearch');
     const clearBtn = document.getElementById('clearSearch');
     const matchCount = document.getElementById('matchCount');
@@ -286,36 +241,19 @@
     function filterCalls(){
       const q = (input.value || '').trim().toLowerCase();
       let matches = 0;
-
       if (q) expandAllMonths();
-
       allRows.forEach(row => {
         const hay = ((row.dataset.company||'')+' '+(row.dataset.contact||'')+' '+(row.dataset.email||'')+' '+(row.dataset.phone||'')+' '+(row.dataset.address||'')).toLowerCase();
         const show = !q || hay.includes(q);
         row.style.display = show ? 'table-row' : 'none';
         if (show) matches++;
       });
-
       matchCount.textContent = q ? `${matches} match${matches===1?'':'es'}` : '';
     }
     input.addEventListener('input', filterCalls, {passive:true});
+    input.addEventListener('keydown', e=>{ if (e.key === 'Enter') e.preventDefault(); });
     clearBtn.addEventListener('click', ()=>{ input.value=''; filterCalls(); input.focus(); });
 
-    // Enter key should not submit anything
-    input.addEventListener('keydown', e=>{ if (e.key === 'Enter') e.preventDefault(); });
-
-    // ===== Map link encoding (mobile quick chips) =====
-    document.querySelectorAll('.map-link').forEach(a=>{
-      a.addEventListener('click', e=>{
-        e.preventDefault();
-        const addr = a.dataset.address || '';
-        if (!addr.trim()) return;
-        const url = 'https://www.google.com/maps?q=' + encodeURIComponent(addr);
-        window.open(url, '_blank');
-      });
-    });
-
-    // Service worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
     }

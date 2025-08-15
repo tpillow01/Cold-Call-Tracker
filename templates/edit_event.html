@@ -7,62 +7,96 @@
   <meta name="theme-color" content="#cc0000" />
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
-  <style>
-    /* small helper for button row only */
-    .btn-row{display:flex; gap:12px; justify-content:flex-start; flex-wrap:wrap}
-  </style>
 </head>
 <body>
-  <!-- Top bar -->
-  <div class="top-header">
-    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan logo" />
-    <h1>Edit Event</h1>
-    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI logo" />
-  </div>
 
-  <!-- Main -->
-  <main class="main-layout">
-    <div class="content">
-      <section class="card">
-        <h2>Edit Scheduled Event</h2>
+  <!-- Clean Header (consistent) -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-wrap">
+        <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
+        <div class="brand-title">Cold Call Tracker</div>
+        <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
+      </div>
+      <nav class="topnav">
+        <a href="/">Dashboard</a>
+        <a href="/schedule">Schedule</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </div>
+  </header>
 
-        <form method="POST" class="grid-form" autocomplete="on">
-          <div class="form-group">
-            <label for="title">Title</label>
-            <input id="title" type="text" name="title" value="{{ event['title'] }}" required />
-          </div>
+  <div class="shell">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sb-title">MENU</div>
+      <div class="sb-nav">
+        <a class="sb-btn" href="/">Dashboard</a>
+        <a class="sb-btn active" href="/schedule">📅 Schedule</a>
+        <a class="sb-btn" href="/logout">Logout</a>
+      </div>
+      <div class="sb-legend">
+        <div class="legend-item"><span class="legend-dot red"></span> Follow-up overdue</div>
+        <div class="legend-item"><span class="legend-dot gray"></span> Due today</div>
+      </div>
+    </aside>
 
-          <div class="form-group">
-            <label for="description">Description</label>
-            <input id="description" type="text" name="description" value="{{ event['description'] }}" />
-          </div>
+    <!-- Main -->
+    <main>
+      <section class="panel">
+        <h2 class="section-title">Edit Scheduled Event</h2>
 
-          <div class="form-group">
-            <label for="date">Date</label>
-            <input id="date" type="date" name="date" value="{{ event['date'] }}" required />
-          </div>
-
-          <div class="form-group">
-            <label for="time">Time</label>
-            <input id="time" type="time" name="time" value="{{ event['time'] }}" />
-          </div>
-
-          <div class="form-group full">
-            <div class="btn-row">
-              <button type="submit" class="btn">💾 Save</button>
-              <a class="btn-logout" href="/schedule" style="width:auto">Cancel</a>
+        <!-- Same grid + fields as Add Event -->
+        <form method="POST" class="form form-vertical" autocomplete="on">
+          <div class="form-grid">
+            <div class="field col-6">
+              <label class="label" for="date">Date</label>
+              <input id="date" class="input" type="date" name="date" value="{{ event['date'] }}" required>
             </div>
+
+            <div class="field col-6">
+              <label class="label" for="time">Time</label>
+              <input id="time" class="input" type="time" name="time" value="{{ event['time'] or '' }}">
+            </div>
+
+            <div class="field col-12">
+              <label class="label" for="title">Title</label>
+              <input id="title" class="input" type="text" name="title" value="{{ event['title'] }}" required
+                     placeholder="Follow-up call with Acme">
+            </div>
+
+            <div class="field col-12">
+              <label class="label" for="description">Notes / Description</label>
+              <textarea id="description" class="textarea" name="description" rows="4"
+                        placeholder="Key points, agenda…">{{ event['description'] or '' }}</textarea>
+            </div>
+
+            <div class="field col-12">
+              <label class="label" for="type">Type</label>
+              <select id="type" class="select" name="type">
+                <option value="call"  {% if (event['type'] or 'call') == 'call' %}selected{% endif %}>Call</option>
+                <option value="visit" {% if event['type'] == 'visit' %}selected{% endif %}>Customer Visit</option>
+                <option value="demo"  {% if event['type'] == 'demo' %}selected{% endif %}>Site Demo</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Foot buttons aligned like other forms -->
+          <div class="btn-row" style="margin-top:12px; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap">
+            <a class="btn" href="/schedule">Cancel</a>
+            <a class="btn" href="/delete_event/{{ event['id'] }}"
+               onclick="return confirm('Delete this event?')"
+               style="background:#c94242;border-color:#c94242;color:#fff">Delete</a>
+            <button type="submit" class="btn primary">Save</button>
           </div>
         </form>
       </section>
-    </div>
-  </main>
+    </main>
+  </div>
 
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/static/sw.js')
-        .then(() => console.log('✅ Service Worker Registered'))
-        .catch(err => console.error('❌ Service Worker Error:', err));
+      navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
     }
   </script>
 </body>
