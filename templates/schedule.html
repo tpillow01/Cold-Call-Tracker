@@ -3,159 +3,82 @@
 <head>
   <meta charset="UTF-8">
   <title>{{ user }}'s Calendar</title>
+
+  <!-- Site CSS + PWA -->
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#cc0000">
-  <meta name="viewport" content="width=device-width, initial-scale=0.5, maximum-scale=1">
+
+  <!-- Important: give the viewport meta an id so we can toggle zoom -->
+  <meta id="viewportMeta"
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <!-- Page-specific tweaks (kept minimal to avoid fighting styles.css) -->
   <style>
     :root { font-size: 18px; }
-
-    body {
-      background: #000;
-      color: #f0f0f0;
-      font-family: "Times New Roman", Times, serif;
-      margin: 0;
-      padding: 0;
-    }
-
-    .top-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 30px;
-      background: #000;
-    }
-
-    .logo-img { height: 60px; }
-
-    .button-bar {
-      margin: 20px;
-      display: flex;
-      gap: 10px;
-    }
-
-    .calendar-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 30px;
-      padding: 0 30px;
-    }
-
-    .calendar-panel, .day-breakdown-panel {
-      flex: 2;
-    }
-
+    .button-bar { margin: 20px; display: flex; gap: 10px; }
+    .calendar-container { display:flex; gap:30px; padding: 0 30px; align-items:flex-start; }
+    .calendar-panel { flex: 2; }
     .suggestion-panel {
-      flex: 1;
-      background: #1a1a1a;
-      padding: 20px;
-      border-radius: 8px;
-      border: 2px solid #cc0000;
+      flex: 1; background:#1a1a1a; padding:20px; border-radius:10px;
+      border:2px solid #cc0000; box-shadow: 0 0 10px rgba(255, 0, 0, .3);
     }
+    .suggestion-panel h3 { color: #ff3333; margin-top:0; }
 
-    .suggestion-panel h3 { color: #ff3333; }
+    .calendar-nav { display:flex; justify-content:space-between; align-items:center; margin: 20px 0; }
+    .calendar-nav a { padding:10px 20px; background:#444; color:#fff; text-decoration:none; border-radius:6px; }
+    .calendar-nav a:hover { background:#cc0000; }
 
-    h1 { text-align: center; margin: 20px 0; }
-
-    .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: #222; border: 1px solid #444; }
+    .weekdays { display:grid; grid-template-columns: repeat(7, 1fr); background:#111; text-align:center; padding:10px 0; border-bottom:2px solid #444; font-weight:700; }
+    .calendar { display:grid; grid-template-columns: repeat(7, 1fr); gap: 6px; background:#222; border: 1px solid #444; border-radius:10px; padding:6px; }
     .day {
-      background: #1a1a1a; padding: 14px; min-height: 100px;
-      position: relative; border-radius: 8px; cursor: pointer;
+      background:#1a1a1a; border-radius:8px; min-height:110px; padding:12px; position:relative; cursor:pointer;
+      border:1px solid #333;
     }
+    .day.today { border-color:#ff3333; box-shadow: 0 0 0 2px rgba(255, 51, 51, .25); }
+    .date { font-weight:700; color:#ff5555; margin-bottom:8px; }
+    .event { background:#cc0000; color:#fff; padding:4px 6px; border-radius:4px; font-size:.85rem; margin-top:4px; overflow:hidden; }
 
-    .day.today { border: 2px solid #ff3333; }
-    .date { font-weight: bold; color: #ff5555; margin-bottom: 5px; }
+    .legend { margin-top: 16px; display:flex; gap:16px; font-size:.9rem; }
+    .legend span { width:14px; height:14px; display:inline-block; border-radius:4px; }
+    .legend .call { background:#cc0000; }
+    .legend .visit { background:#0077cc; }
+    .legend .demo { background:#ffaa00; }
 
-    .event {
-      background: #cc0000; color: white; padding: 4px 6px; margin-top: 4px;
-      border-radius: 4px; font-size: 0.85rem; overflow: hidden;
+    .day-breakdown-panel { display:none; }
+    .hour-block { background:#1a1a1a; border:1px solid #333; padding:10px; margin-bottom:6px; border-radius:6px; }
+    .hour-label { font-weight:700; color:#ff3333; }
+
+    /* Add Event Modal (mobile-safe) */
+    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); justify-content:center; align-items:center; z-index:1000; }
+    .modal-card {
+      background:#1a1a1a; padding:40px; border-radius:10px; border:2px solid #cc0000;
+      width:90%; max-width:600px; box-shadow:0 0 10px #cc0000; position:relative;
     }
-
-    .weekdays {
-      display: grid; grid-template-columns: repeat(7, 1fr);
-      background: #111; text-align: center; padding: 10px 0;
-      border-bottom: 2px solid #444; font-weight: bold;
-    }
-
-    .calendar-nav {
-      display: flex; justify-content: space-between;
-      align-items: center; margin: 20px 0;
-    }
-
-    .calendar-nav a {
-      padding: 10px 20px; background: #444; color: #fff;
-      text-decoration: none; border-radius: 6px;
-    }
-
-    .calendar-nav a:hover { background: #cc0000; }
-
-    .legend {
-      margin-top: 20px; display: flex; gap: 15px; font-size: 0.9rem;
-    }
-
-    .legend span {
-      width: 14px; height: 14px; display: inline-block; border-radius: 4px;
-    }
-
-    .legend .call { background: #cc0000; }
-    .legend .visit { background: #0077cc; }
-    .legend .demo { background: #ffaa00; }
-
-    .btn {
-      background: #cc0000; border: none; color: #fff;
-      padding: 10px 16px; border-radius: 6px; cursor: pointer;
-      text-decoration: none;
-    }
-
-    .btn:hover { background: #a00000; }
-
-    .hour-block {
-      background: #1a1a1a; border: 1px solid #333;
-      padding: 10px; margin-bottom: 6px; border-radius: 6px;
-    }
-
-    .hour-label {
-      font-weight: bold; color: #ff3333;
-    }
-
-    #dayBreakdownContainer { display: none; }
+    .modal-close { position:absolute; top:10px; right:20px; font-size:28px; color:#fff; cursor:pointer; }
 
     @media (max-width: 768px) {
-      .calendar-container { flex-direction: column; }
+      .calendar-container { flex-direction:column; padding: 0 16px; }
     }
-
     @media (max-width: 600px) {
-      #eventModal > div {
-        width: 100vw !important;
-        height: 100vh;
-        max-width: none;
-        border-radius: 0;
-        padding: 20px;
-        overflow-y: auto;
-      }
-
-      input, textarea, select {
-        font-size: 18px !important;
-      }
-
-      body {
-        overscroll-behavior: contain;
-        touch-action: manipulation;
-      }
+      .modal-card { width:100vw; height:100vh; max-width:none; border-radius:0; padding:20px; overflow-y:auto; }
+      input, textarea, select { font-size:18px !important; }
+      body { overscroll-behavior: contain; touch-action: manipulation; }
     }
   </style>
 </head>
 <body>
-  <div class="top-bar">
-    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img">
+  <!-- Shared header style from styles.css -->
+  <div class="top-header">
+    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="TYNAN">
     <h1>{{ user }}'s Schedule</h1>
-    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img">
+    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI">
   </div>
 
   <div class="button-bar">
     <a href="/" class="btn">🏠 Dashboard</a>
-    <button class="btn" onclick="enableZoom(); document.getElementById('eventModal').style.display='flex'">➕ Add Event</button>
+    <button class="btn" onclick="enableZoom(); openAddEvent()">➕ Add Event</button>
   </div>
 
   <div class="calendar-container">
@@ -183,11 +106,12 @@
         {% for day in range(1, total_days + 1) %}
           {% set current_date = date(year, month, day) %}
           {% set date_str = current_date.strftime('%Y-%m-%d') %}
-          <div class="day {% if current_date == today %}today{% endif %}" onclick="enableZoom(); showDayBreakdown('{{ date_str }}')">
+          <div class="day {% if current_date == today %}today{% endif %}"
+               onclick="enableZoom(); showDayBreakdown('{{ date_str }}')">
             <div class="date">{{ day }}</div>
             {% if event_map.get(date_str) %}
               {% for e in event_map[date_str] %}
-                <div class="event" data-type="{{ e.get('type', 'call') }}" data-description="{{ e.description or '' }}">
+                <div class="event" data-type="{{ e.get('type', 'call') }}" title="{{ e.description or '' }}">
                   {{ e.title }}{% if e.time %} @ {{ e.time }}{% endif %}
                 </div>
               {% endfor %}
@@ -204,14 +128,14 @@
     </div>
 
     <!-- Suggestions Panel -->
-    <div class="suggestion-panel">
+    <aside class="suggestion-panel">
       <h3>Suggestions for What to Schedule Next</h3>
       <ul>
         <li>Customer Visit</li>
         <li>Site Demo</li>
         <li>Sales Call</li>
       </ul>
-    </div>
+    </aside>
 
     <!-- Day Breakdown Panel -->
     <div class="day-breakdown-panel" id="dayBreakdownContainer">
@@ -221,89 +145,106 @@
     </div>
   </div>
 
-<!-- Add Event Modal -->
-<div class="modal" id="eventModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
-  <div style="background:#1a1a1a; padding:40px; border-radius:10px; border:2px solid #cc0000; width:90%; max-width:600px; box-shadow:0 0 10px #cc0000; position:relative;">
-    <span onclick="disableZoom(); document.getElementById('eventModal').style.display='none'" style="position:absolute; top:10px; right:20px; font-size:28px; color:#fff; cursor:pointer;">&times;</span>
-    <h2 style="color:#ff3333; margin-bottom:20px;">Add New Event</h2>
-    <form method="POST" action="/schedule" style="display:flex; flex-direction:column; gap:15px;">
-      <label>Title</label>
-      <input type="text" name="title" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
-      <label>Description</label>
-      <input type="text" name="description" style="padding:10px; font-size:16px; border-radius:6px; border:none;">
-      <label>Date</label>
-      <input type="date" name="date" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
-      <label>Time</label>
-      <input type="time" name="time" style="padding:10px; font-size:16px; border-radius:6px; border:none;">
-      <label>Type</label>
-      <select name="type" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
-        <option value="call">Sales Call</option>
-        <option value="visit">Customer Visit</option>
-        <option value="demo">Site Demo</option>
-      </select>
-      <button type="submit" class="btn" style="margin-top:10px;">Save</button>
-    </form>
+  <!-- Add Event Modal -->
+  <div class="modal" id="eventModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="addEventTitle">
+      <span class="modal-close" onclick="disableZoom(); closeAddEvent()" aria-label="Close">&times;</span>
+      <h2 id="addEventTitle" style="color:#ff3333; margin-bottom:20px;">Add New Event</h2>
+      <form method="POST" action="/schedule" style="display:flex; flex-direction:column; gap:15px;">
+        <label>Title</label>
+        <input type="text" name="title" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
+        <label>Description</label>
+        <input type="text" name="description" style="padding:10px; font-size:16px; border-radius:6px; border:none;">
+        <label>Date</label>
+        <input type="date" name="date" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
+        <label>Time</label>
+        <input type="time" name="time" style="padding:10px; font-size:16px; border-radius:6px; border:none;">
+        <label>Type</label>
+        <select name="type" required style="padding:10px; font-size:16px; border-radius:6px; border:none;">
+          <option value="call">Sales Call</option>
+          <option value="visit">Customer Visit</option>
+          <option value="demo">Site Demo</option>
+        </select>
+        <button type="submit" class="btn" style="margin-top:10px;">Save</button>
+      </form>
+    </div>
   </div>
-</div>
 
-<script>
-  const events = {{ event_map | tojson | safe }};
+  <!-- Safely embed event_map JSON to avoid JS linter errors -->
+  <script id="events-data" type="application/json">
+    {{ event_map | tojson | safe }}
+  </script>
 
-  function showDayBreakdown(date) {
-    document.getElementById("calendarPanel").style.display = "none";
-    document.getElementById("dayBreakdownContainer").style.display = "block";
+  <script>
+    // Read events JSON safely
+    const events = (() => {
+      try {
+        const el = document.getElementById('events-data');
+        return el ? JSON.parse(el.textContent) : {};
+      } catch { return {}; }
+    })();
 
-    const breakdownTitle = document.getElementById("dayBreakdownTitle");
-    const slotContainer = document.getElementById("hourlySlots");
-    const formattedDate = new Date(date).toDateString();
-    breakdownTitle.textContent = "Schedule for " + formattedDate;
+    function openAddEvent(){ document.getElementById('eventModal').style.display = 'flex'; }
+    function closeAddEvent(){ document.getElementById('eventModal').style.display = 'none'; }
 
-    const hours = [];
-    for (let i = 7; i <= 18; i++) {
-      let hour = i % 12 || 12;
-      let ampm = i < 12 ? 'AM' : 'PM';
-      hours.push(`${hour}:00 ${ampm}`);
+    function showDayBreakdown(date) {
+      document.getElementById("calendarPanel").style.display = "none";
+      document.getElementById("dayBreakdownContainer").style.display = "block";
+
+      const breakdownTitle = document.getElementById("dayBreakdownTitle");
+      const slotContainer  = document.getElementById("hourlySlots");
+      const formattedDate  = new Date(date).toDateString();
+      breakdownTitle.textContent = "Schedule for " + formattedDate;
+
+      // Build hour slots 07:00–18:00 with both display label and 24h key
+      const hours = [];
+      for (let i = 7; i <= 18; i++) {
+        const h12 = i % 12 || 12;
+        const ampm = i < 12 ? 'AM' : 'PM';
+        const label = `${h12}:00 ${ampm}`;
+        const key   = `${String(i).padStart(2,'0')}:00`; // "07:00", "13:00"
+        hours.push({ label, key });
+      }
+
+      const eventsOnDate = events[date] || [];
+      slotContainer.innerHTML = hours.map(hour => {
+        // Match any event whose time starts with the hour key (accepts "07:00" or "07:30")
+        const match = eventsOnDate.find(e => (e.time || '').startsWith(hour.key));
+        const content = match
+          ? `<div class="event">${match.title}${match.description ? ' — ' + match.description : ''}</div>`
+          : `<div class="empty">No event</div>`;
+        return `<div class="hour-block">
+                  <div class="hour-label">${hour.label}</div>
+                  ${content}
+                </div>`;
+      }).join('');
     }
 
-    const eventsOnDate = events[date] || [];
-    slotContainer.innerHTML = hours.map(h => {
-      const match = eventsOnDate.find(e => e.time === h.replace(':00', '').padStart(5, '0'));
-      return `<div class="hour-block">
-                <div class="hour-label">${h}</div>
-                ${match ? `<div class="event">${match.title} - ${match.description || ''}</div>` : `<div class="empty">No event</div>`}
-              </div>`;
-    }).join('');
-  }
-
-  function returnToCalendar() {
-    document.getElementById("calendarPanel").style.display = "block";
-    document.getElementById("dayBreakdownContainer").style.display = "none";
-  }
-</script>
-
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/static/sw.js')
-      .then(reg => console.log('✅ Service Worker Registered'))
-      .catch(err => console.error('❌ Service Worker Error:', err));
-  }
-</script>
-
-<script>
-  function enableZoom() {
-    const meta = document.getElementById('viewportMeta');
-    if (meta) {
-      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes');
+    function returnToCalendar() {
+      document.getElementById("calendarPanel").style.display = "block";
+      document.getElementById("dayBreakdownContainer").style.display = "none";
     }
-  }
 
-  function disableZoom() {
-    const meta = document.getElementById('viewportMeta');
-    if (meta) {
-      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    // PWA SW
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(() => console.log('✅ Service Worker Registered'))
+        .catch(err => console.error('❌ Service Worker Error:', err));
     }
-  }
-</script>
 
+    // Zoom helpers for modal / detail view
+    function setViewport(content) {
+      const meta = document.getElementById('viewportMeta');
+      if (meta) meta.setAttribute('content', content);
+    }
+    function enableZoom()  { setViewport('width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes'); }
+    function disableZoom() { setViewport('width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'); }
+
+    // Expose for inline onclicks
+    window.enableZoom = enableZoom;
+    window.disableZoom = disableZoom;
+    window.openAddEvent = openAddEvent;
+    window.closeAddEvent = closeAddEvent;
+  </script>
 </body>
 </html>

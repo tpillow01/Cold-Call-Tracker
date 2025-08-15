@@ -1,127 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Edit Event</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <meta name="theme-color" content="#cc0000">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="theme-color" content="#cc0000" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
   <style>
-    .centered-form-wrapper {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 90vh;
-      padding: 20px;
-    }
-
-    .event-form-container {
-      background-color: #1a1a1a;
-      border-radius: 12px;
-      padding: 40px;
-      width: 100%;
-      max-width: 700px;
-      box-shadow: 0 0 0 2px #cc0000;
-    }
-
-    .event-form-container h2 {
-      margin-top: 0;
-      font-size: 28px;
-      text-align: center;
-      margin-bottom: 30px;
-      border-bottom: 2px solid #cc0000;
-      padding-bottom: 10px;
-    }
-
-    .event-form-container form {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-
-    .event-form-container .form-group {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .event-form-container label {
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-
-    .event-form-container input,
-    .event-form-container select,
-    .event-form-container textarea {
-      padding: 12px;
-      background: #222;
-      border: 1px solid #555;
-      border-radius: 6px;
-      color: #fff;
-      font-size: 16px;
-    }
-
-    .event-form-container .form-group.full {
-      grid-column: span 2;
-    }
-
-    .event-form-container .btn {
-      margin-top: 10px;
-      padding: 14px 24px;
-      font-size: 16px;
-    }
-
-    @media (max-width: 768px) {
-      .event-form-container form {
-        grid-template-columns: 1fr;
-      }
-
-      .event-form-container .form-group.full {
-        grid-column: span 1;
-      }
-    }
+    /* small helper for button row only */
+    .btn-row{display:flex; gap:12px; justify-content:flex-start; flex-wrap:wrap}
   </style>
 </head>
 <body>
+  <!-- Top bar -->
   <div class="top-header">
-    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img">
+    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan logo" />
     <h1>Edit Event</h1>
-    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img">
+    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI logo" />
   </div>
 
-  <div class="centered-form-wrapper">
-    <div class="event-form-container">
-      <h2>Edit Scheduled Event</h2>
-      <form method="POST">
-        <div class="form-group">
-          <label>Title</label>
-          <input type="text" name="title" value="{{ event['title'] }}" required>
-        </div>
-        <div class="form-group">
-          <label>Description</label>
-          <input type="text" name="description" value="{{ event['description'] }}">
-        </div>
-        <div class="form-group">
-          <label>Date</label>
-          <input type="date" name="date" value="{{ event['date'] }}" required>
-        </div>
-        <div class="form-group">
-          <label>Time</label>
-          <input type="time" name="time" value="{{ event['time'] }}">
-        </div>
-        <div class="form-group full">
-          <button type="submit" class="btn">Save</button>
-        </div>
-      </form>
+  <!-- Main -->
+  <main class="main-layout">
+    <div class="content">
+      <section class="card">
+        <h2>Edit Scheduled Event</h2>
+
+        <form method="POST" class="grid-form" autocomplete="on">
+          <div class="form-group">
+            <label for="title">Title</label>
+            <input id="title" type="text" name="title" value="{{ event['title'] }}" required />
+          </div>
+
+          <div class="form-group">
+            <label for="description">Description</label>
+            <input id="description" type="text" name="description" value="{{ event['description'] }}" />
+          </div>
+
+          <div class="form-group">
+            <label for="date">Date</label>
+            <input id="date" type="date" name="date" value="{{ event['date'] }}" required />
+          </div>
+
+          <div class="form-group">
+            <label for="time">Time</label>
+            <input id="time" type="time" name="time" value="{{ event['time'] }}" />
+          </div>
+
+          <div class="form-group full">
+            <div class="btn-row">
+              <button type="submit" class="btn">💾 Save</button>
+              <a class="btn-logout" href="/schedule" style="width:auto">Cancel</a>
+            </div>
+          </div>
+        </form>
+      </section>
     </div>
-  </div>
+  </main>
 
   <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/static/sw.js')
-      .then(reg => console.log('✅ Service Worker Registered'))
-      .catch(err => console.error('❌ Service Worker Error:', err));
-  }
-</script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(() => console.log('✅ Service Worker Registered'))
+        .catch(err => console.error('❌ Service Worker Error:', err));
+    }
+  </script>
 </body>
 </html>

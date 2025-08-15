@@ -1,137 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Edit Cold Call</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <meta name="theme-color" content="#cc0000">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="theme-color" content="#cc0000" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
   <style>
-    .centered-form-wrapper {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 90vh;
-      padding: 20px;
-    }
-
-    .call-form-container {
-      background-color: #1a1a1a;
-      border-radius: 12px;
-      padding: 40px;
-      width: 100%;
-      max-width: 700px;
-      box-shadow: 0 0 0 2px #cc0000;
-    }
-
-    .call-form-container h2 {
-      margin-top: 0;
-      font-size: 28px;
-      text-align: center;
-      margin-bottom: 30px;
-      border-bottom: 2px solid #cc0000;
-      padding-bottom: 10px;
-    }
-
-    .call-form-container form {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 25px;
-    }
-
-    .call-form-container .form-group {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .call-form-container label {
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-
-    .call-form-container input,
-    .call-form-container textarea {
-      padding: 14px;
-      background: #222;
-      border: 1px solid #555;
-      border-radius: 6px;
-      color: #fff;
-      font-size: 16px;
-    }
-
-    .call-form-container .form-group.full {
-      grid-column: span 2;
-    }
-
-    .btn {
-      padding: 12px 20px;
-      font-size: 15px;
-      margin-right: 10px;
-    }
-
-    .btn-small {
-      font-size: 14px;
-      padding: 10px 18px;
-    }
-
-    @media (max-width: 768px) {
-      .call-form-container form {
-        grid-template-columns: 1fr;
-      }
-      .call-form-container .form-group.full {
-        grid-column: span 1;
-      }
-    }
+    /* tiny helper just for the button row */
+    .btn-row{display:flex; gap:12px; justify-content:space-between; flex-wrap:wrap}
   </style>
 </head>
 <body>
+  <!-- Top bar -->
   <div class="top-header">
-    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img">
+    <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan logo" />
     <h1>Edit Cold Call</h1>
-    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img">
+    <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI logo" />
   </div>
 
-  <div class="centered-form-wrapper">
-    <div class="call-form-container">
-      <h2>Edit Cold Call</h2>
-      <form method="POST">
-        <div class="form-group">
-          <label>Company</label>
-          <input type="text" name="company" value="{{ call['company'] }}" required>
-        </div>
-        <div class="form-group">
-          <label>Contact Name</label>
-          <input type="text" name="contact_name" value="{{ call['contact_name'] or '' }}">
-        </div>
-        <div class="form-group">
-          <label>Phone</label>
-          <input type="text" name="phone" value="{{ call['phone'] or '' }}">
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" name="email" value="{{ call['email'] or '' }}">
-        </div>
-        <div class="form-group full">
-          <label>Address</label>
-          <input type="text" name="address" value="{{ call['address'] or '' }}">
-        </div>
-        <div class="form-group full">
-          <label>Notes</label>
-          <textarea name="notes" rows="4">{{ call['notes'] or '' }}</textarea>
-        </div>
-        <div class="form-group full" style="display:flex; justify-content:space-between;">
-          <button type="submit" class="btn btn-small">💾 Save</button>
-          <a href="/delete_call/{{ call['id'] }}" class="btn btn-small" style="background:#cc0000;" onclick="return confirm('Are you sure?')">🗑 Delete</a>
-        </div>
-      </form>
+  <!-- Main -->
+  <main class="main-layout">
+    <div class="content">
+      <section class="card">
+        <h2>Edit Cold Call</h2>
+
+        <form method="POST" class="grid-form" autocomplete="on">
+          <div class="form-group">
+            <label for="company">Company</label>
+            <input id="company" type="text" name="company" value="{{ call['company'] }}" required />
+          </div>
+
+          <div class="form-group">
+            <label for="contact_name">Contact Name</label>
+            <input id="contact_name" type="text" name="contact_name" value="{{ call['contact_name'] or '' }}" />
+          </div>
+
+          <div class="form-group">
+            <label for="phone">Phone</label>
+            <input id="phone" type="text" name="phone" value="{{ call['phone'] or '' }}" />
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input id="email" type="email" name="email" value="{{ call['email'] or '' }}" />
+          </div>
+
+          <div class="form-group full">
+            <label for="address">Address</label>
+            <input id="address" type="text" name="address" value="{{ call['address'] or '' }}" />
+          </div>
+
+          <div class="form-group full">
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes" rows="4">{{ call['notes'] or '' }}</textarea>
+          </div>
+
+          <div class="form-group full">
+            <div class="btn-row">
+              <button type="submit" class="btn">💾 Save</button>
+              <a class="btn outline" href="/delete_call/{{ call['id'] }}" onclick="return confirm('Delete this call?')">🗑 Delete</a>
+              <a class="btn-logout" href="{{ url_for('index') }}" style="width:auto">Cancel</a>
+            </div>
+          </div>
+        </form>
+      </section>
     </div>
-  </div>
+  </main>
 
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/static/sw.js')
-        .then(reg => console.log('✅ Service Worker Registered'))
+        .then(() => console.log('✅ Service Worker Registered'))
         .catch(err => console.error('❌ Service Worker Error:', err));
     }
   </script>
