@@ -442,3 +442,26 @@ html, body { overflow-y:auto }
 .scan-preview img{max-height:120px;border-radius:10px}
 .scan-progress{font-weight:800;color:#cbd2da}
 .badge-auto{display:inline-block;background:#121922;border:1px solid #232b36;color:#9db0c7;border-radius:999px;padding:4px 8px;font-size:.8rem;margin-left:6px}
+
+/* ==== Modal: always scroll body, sticky head/foot ==== */
+.modal .dialog{
+  max-height: 92dvh;            /* keeps dialog on screen */
+  display:flex;
+  flex-direction:column;
+}
+.dialog .head{
+  position:sticky; top:0; z-index:2;
+  background:linear-gradient(180deg,#14181f,#11151b);
+  border-bottom:1px solid var(--border);
+}
+.dialog .body{
+  flex:1; min-height:0;         /* enable child overflow */
+  overflow:auto;                 /* << makes form scroll */
+  -webkit-overflow-scrolling:touch;
+}
+.dialog .foot{
+  position:sticky; bottom:0; z-index:2;
+  background:linear-gradient(180deg,transparent,#10151b);
+  border-top:1px solid var(--border);
+  padding-top:8px;
+}
