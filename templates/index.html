@@ -146,49 +146,87 @@
     </main>
   </div>
 
-  <!-- Add Call Modal -->
-  <div class="modal" id="callModal" aria-hidden="true">
-    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="newCallTitle">
-      <div class="head">
-        <h2 id="newCallTitle" class="mt-0 mb-0">Log a New Cold Call</h2>
-        <button class="btn icon ghost" type="button" aria-label="Close" onclick="closeModal()">✕</button>
+<!-- Add Call Modal (with Business Card Scan) -->
+<div class="modal" id="callModal" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="newCallTitle">
+    <div class="head">
+      <h2 id="newCallTitle" class="mt-0 mb-0">Log a New Cold Call</h2>
+      <button class="btn icon ghost" type="button" aria-label="Close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="body">
+      <!-- SCAN CONTROLS -->
+      <div class="scan-row">
+        <input id="cardInput" type="file" accept="image/*" capture="environment" style="display:none" />
+        <button class="scan-btn" type="button" id="scanBtn">📷 Scan business card</button>
+        <span class="scan-note">Auto-fill company, name, email, phone from a photo.</span>
       </div>
-      <div class="body">
-        <form id="newcall-form" action="/add" method="POST" class="form form-vertical" autocomplete="on">
-          <div class="form-grid">
-            <div class="field col-6">
-              <label class="label" for="company">Company <span class="subtle">(required)</span></label>
-              <input id="company" class="input" type="text" name="company" required placeholder="Acme Manufacturing" autocomplete="organization">
-            </div>
-            <div class="field col-6">
-              <label class="label" for="contact_name">Contact Name</label>
-              <input id="contact_name" class="input" type="text" name="contact_name" placeholder="Jane Smith" autocomplete="name">
-            </div>
-            <div class="field col-6">
-              <label class="label" for="phone">Phone</label>
-              <input id="phone" class="input" type="tel" inputmode="tel" name="phone" placeholder="(317) 555-0199" autocomplete="tel">
-            </div>
-            <div class="field col-6">
-              <label class="label" for="email">Email</label>
-              <input id="email" class="input" type="email" name="email" placeholder="jane@acme.com" autocomplete="email">
-            </div>
-            <div class="field col-12">
-              <label class="label" for="address">Address</label>
-              <input id="address" class="input" type="text" name="address" placeholder="123 Commerce Dr, Indianapolis IN" autocomplete="street-address">
-            </div>
-            <div class="field col-12">
-              <label class="label" for="notes">Notes</label>
-              <textarea id="notes" class="textarea" name="notes" rows="4" placeholder="Left voicemail…" autocomplete="off"></textarea>
-            </div>
+      <div id="scanPreview" class="scan-preview" style="display:none">
+        <img id="cardPreview" alt="Business card preview">
+        <div>
+          <div class="scan-progress" id="scanProgress">Scanning…</div>
+          <div class="subtle" id="scanHints" style="margin-top:4px"></div>
+        </div>
+      </div>
+
+      <!-- FORM -->
+      <form id="newcall-form" action="/add" method="POST" class="form form-vertical" autocomplete="on">
+        <div class="form-grid">
+          <div class="field col-6">
+            <label class="label" for="company">Company <span class="subtle">(required)</span>
+              <span id="badgeCompany" class="badge-auto" style="display:none">auto</span>
+            </label>
+            <input id="company" class="input" type="text" name="company" required
+                   placeholder="Acme Manufacturing" autocomplete="organization">
           </div>
-        </form>
-      </div>
-      <div class="foot">
-        <button class="btn" type="button" onclick="closeModal()">Cancel</button>
-        <button class="btn primary" form="newcall-form" type="submit">Add Call</button>
-      </div>
+
+          <div class="field col-6">
+            <label class="label" for="contact_name">Contact Name
+              <span id="badgeName" class="badge-auto" style="display:none">auto</span>
+            </label>
+            <input id="contact_name" class="input" type="text" name="contact_name"
+                   placeholder="Jane Smith" autocomplete="name">
+          </div>
+
+          <div class="field col-6">
+            <label class="label" for="phone">Phone
+              <span id="badgePhone" class="badge-auto" style="display:none">auto</span>
+            </label>
+            <input id="phone" class="input" type="tel" inputmode="tel" name="phone"
+                   placeholder="(317) 555-0199" autocomplete="tel">
+          </div>
+
+          <div class="field col-6">
+            <label class="label" for="email">Email
+              <span id="badgeEmail" class="badge-auto" style="display:none">auto</span>
+            </label>
+            <input id="email" class="input" type="email" name="email"
+                   placeholder="jane@acme.com" autocomplete="email">
+          </div>
+
+          <div class="field col-12">
+            <label class="label" for="address">Address
+              <span id="badgeAddress" class="badge-auto" style="display:none">auto</span>
+            </label>
+            <input id="address" class="input" type="text" name="address"
+                   placeholder="123 Commerce Dr, Indianapolis IN" autocomplete="street-address">
+          </div>
+
+          <div class="field col-12">
+            <label class="label" for="notes">Notes</label>
+            <textarea id="notes" class="textarea" name="notes" rows="4"
+                      placeholder="Left voicemail…"></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="foot">
+      <button class="btn" type="button" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" form="newcall-form" type="submit">Add Call</button>
     </div>
   </div>
+</div>
 
   <script>
     // ===== Month accordion with persistence =====
@@ -256,6 +294,163 @@
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
+    }
+  </script>
+
+  <!-- ====== ADDED: Tesseract.js + OCR autofill for business card scan ====== -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script>
+    // Business card scan logic
+    const scanBtn = document.getElementById('scanBtn');
+    const fileInput = document.getElementById('cardInput');
+    const previewWrap = document.getElementById('scanPreview');
+    const previewImg = document.getElementById('cardPreview');
+    const scanProgress = document.getElementById('scanProgress');
+    const scanHints = document.getElementById('scanHints');
+
+    const fCompany = document.getElementById('company');
+    const fName    = document.getElementById('contact_name');
+    const fEmail   = document.getElementById('email');
+    const fPhone   = document.getElementById('phone');
+    const fAddr    = document.getElementById('address');
+
+    const bCompany = document.getElementById('badgeCompany');
+    const bName    = document.getElementById('badgeName');
+    const bEmail   = document.getElementById('badgeEmail');
+    const bPhone   = document.getElementById('badgePhone');
+    const bAddr    = document.getElementById('badgeAddress');
+
+    function showBadge(el, show){ if(el) el.style.display = show ? '' : 'none'; }
+
+    if (scanBtn && fileInput){
+      scanBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', handleImageSelect);
+    }
+
+    async function handleImageSelect(){
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+
+      // Preview
+      const objectUrl = URL.createObjectURL(file);
+      previewImg.src = objectUrl;
+      previewWrap.style.display = '';
+      scanProgress.textContent = 'Scanning…';
+      scanHints.textContent = '';
+
+      // Downscale for faster OCR
+      const dataUrl = await downscaleImage(file, 1600);
+      await runOCR(dataUrl);
+
+      // Cleanup
+      URL.revokeObjectURL(objectUrl);
+    }
+
+    function downscaleImage(file, maxW){
+      return new Promise((resolve,reject)=>{
+        const img = new Image();
+        let localURL = '';
+        img.onload = ()=>{
+          const ratio = Math.min(1, maxW / img.width);
+          const w = Math.round(img.width * ratio);
+          const h = Math.round(img.height * ratio);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          URL.revokeObjectURL(localURL);
+          resolve(canvas.toDataURL('image/jpeg', 0.9));
+        };
+        img.onerror = reject;
+        localURL = URL.createObjectURL(file);
+        img.src = localURL;
+      });
+    }
+
+    async function runOCR(dataUrl){
+      try{
+        const worker = await Tesseract.createWorker('eng', 1, {
+          logger: m => {
+            if (m.status === 'recognizing text' && m.progress != null){
+              scanProgress.textContent = `Scanning… ${(m.progress*100).toFixed(0)}%`;
+            }
+          }
+        });
+        const { data: { text } } = await worker.recognize(dataUrl);
+        await worker.terminate();
+
+        scanProgress.textContent = 'Parsing details…';
+        const parsed = parseBusinessCard(text || '');
+        fillFields(parsed);
+        scanProgress.textContent = 'Done. Review & save.';
+        scanHints.innerHTML = (parsed._hints || []).join(' · ');
+      }catch(err){
+        console.error(err);
+        scanProgress.textContent = 'Scan failed. You can still type fields manually.';
+        scanHints.textContent = 'Tip: Retake the photo in good light, flat card.';
+      }
+    }
+
+    // Heuristic parsing
+    function parseBusinessCard(raw){
+      const lines = (raw || '').replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
+      const out = { company:'', name:'', email:'', phone:'', address:'', _hints:[] };
+
+      // Email
+      const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      if (emailMatch) out.email = emailMatch[0];
+
+      // Phone
+      const phoneMatch = raw.match(/(?:\+?\d[\d\s().-]{7,}\d)/);
+      if (phoneMatch){ out.phone = normalisePhone(phoneMatch[0]); }
+
+      // Company
+      const corpIdx = lines.findIndex(l => /\b(LLC|INC\.?|CORP\.?|CO\.?|COMPANY|INDUSTRIES|HOLDINGS)\b/i.test(l));
+      if (corpIdx >= 0) out.company = cleanCompany(lines[corpIdx]);
+      if (!out.company){
+        const upper = lines.find(l => l.length>2 && l === l.toUpperCase() && !/\d/.test(l));
+        if (upper) out.company = cleanCompany(upper);
+      }
+      if (!out.company && lines[0]) out.company = cleanCompany(lines[0]);
+
+      // Name (two+ proper words)
+      const nameIdx = lines.findIndex(l => /^[A-Z][a-z]+(?:[-\s'][A-Z][a-z]+)+$/.test(l));
+      if (nameIdx >= 0) out.name = lines[nameIdx];
+
+      // Address (street suffix or number + street)
+      const addrIdx = lines.findIndex(l => /\b(AVE|AVENUE|ST|STREET|RD|ROAD|BLVD|DR|DRIVE|LN|LANE|HWY|SUITE|STE|FLOOR|BLDG|UNIT)\b/i.test(l) || /\d{3,} [A-Za-z]/.test(l));
+      if (addrIdx >= 0){ out.address = lines.slice(addrIdx, addrIdx+2).join(', '); }
+
+      if (out.email) out._hints.push('email');
+      if (out.phone) out._hints.push('phone');
+      if (out.name) out._hints.push('name');
+      if (out.company) out._hints.push('company');
+      if (out.address) out._hints.push('address');
+
+      return out;
+    }
+
+    function normalisePhone(s){
+      const digits = s.replace(/[^\d+]/g,'');
+      // format US-like if possible
+      const m = digits.match(/^\+?1?(\d{10})$/);
+      if (m){ return `(${m[1].slice(0,3)}) ${m[1].slice(3,6)}-${m[1].slice(6)}`; }
+      return s.trim();
+    }
+    function cleanCompany(s){
+      return s.replace(/\s{2,}/g,' ').replace(/\s+[|·\-–]\s+.*$/, '').trim();
+    }
+
+    function fillFields(p){
+      if (p.company && fCompany && !fCompany.value){ fCompany.value = p.company; showBadge(bCompany,true); }
+      if (p.name && fName && !fName.value){ fName.value = p.name; showBadge(bName,true); }
+      if (p.email && fEmail && !fEmail.value){ fEmail.value = p.email; showBadge(bEmail,true); }
+      if (p.phone && fPhone && !fPhone.value){ fPhone.value = p.phone; showBadge(bPhone,true); }
+      if (p.address && fAddr && !fAddr.value){ fAddr.value = p.address; showBadge(bAddr,true); }
+
+      // Scroll to the form start after auto-fill to prompt review
+      const form = document.getElementById('newcall-form');
+      if (form){ form.scrollIntoView({behavior:'smooth', block:'start'}); }
     }
   </script>
 </body>

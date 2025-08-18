@@ -429,3 +429,16 @@ html, body { overflow-y:auto }
 
 /* Remove space for previously-used bottom dock/FAB if any were present */
 .fab, .mobile-dock { display:none !important }
+
+/* ==== Business card scan UI ==== */
+.scan-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.scan-btn{background:#1a1f27;border:1px solid var(--border);color:#e9edf3;font-weight:800;border-radius:12px;padding:10px 14px;cursor:pointer}
+.scan-btn:hover{background:#202635}
+.scan-note{color:var(--muted);font-size:.92rem}
+.scan-preview{
+  display:flex;align-items:center;gap:10px;margin-top:10px;
+  background:#11161c;border:1px dashed var(--border);border-radius:12px;padding:10px
+}
+.scan-preview img{max-height:120px;border-radius:10px}
+.scan-progress{font-weight:800;color:#cbd2da}
+.badge-auto{display:inline-block;background:#121922;border:1px solid #232b36;color:#9db0c7;border-radius:999px;padding:4px 8px;font-size:.8rem;margin-left:6px}
