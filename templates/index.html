@@ -318,373 +318,409 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <!-- Tesseract.js (OCR fallback) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script>
-/* ===================== QR FIRST, THEN OCR (email-domain = company, single phone) ===================== */
-const scanBtn = document.getElementById('scanBtn');
-const fileInput = document.getElementById('cardInput');
-const previewWrap = document.getElementById('scanPreview');
-const previewImg = document.getElementById('cardPreview');
-const scanProgress = document.getElementById('scanProgress');
-const scanHints = document.getElementById('scanHints');
+  <script>
+  /* ===================== QR FIRST, THEN OCR (email-domain → company, single phone) ===================== */
 
-const fCompany = document.getElementById('company');
-const fName    = document.getElementById('contact_name');
-const fEmail   = document.getElementById('email');
-const fPhone   = document.getElementById('phone');
-const fAddr    = document.getElementById('address');
+  // ---------- form/preview refs ----------
+  const scanBtn = document.getElementById('scanBtn');
+  const fileInput = document.getElementById('cardInput');
+  const previewWrap = document.getElementById('scanPreview');
+  const previewImg = document.getElementById('cardPreview');
+  const scanProgress = document.getElementById('scanProgress');
+  const scanHints = document.getElementById('scanHints');
 
-const bCompany = document.getElementById('badgeCompany');
-const bName    = document.getElementById('badgeName');
-const bEmail   = document.getElementById('badgeEmail');
-const bPhone   = document.getElementById('badgePhone');
-const bAddr    = document.getElementById('badgeAddress');
-const showBadge = (el, on) => { if (el) el.style.display = on ? '' : 'none'; };
+  const fCompany = document.getElementById('company');
+  const fName    = document.getElementById('contact_name');
+  const fEmail   = document.getElementById('email');
+  const fPhone   = document.getElementById('phone');
+  const fAddr    = document.getElementById('address');
 
-if (scanBtn && fileInput){
-  scanBtn.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', handleImage);
-}
+  const bCompany = document.getElementById('badgeCompany');
+  const bName    = document.getElementById('badgeName');
+  const bEmail   = document.getElementById('badgeEmail');
+  const bPhone   = document.getElementById('badgePhone');
+  const bAddr    = document.getElementById('badgeAddress');
+  const showBadge = (el, on) => { if (el) el.style.display = on ? '' : 'none'; };
 
-async function handleImage(){
-  const file = fileInput.files && fileInput.files[0];
-  if (!file) return;
+  if (scanBtn && fileInput){
+    scanBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleImage);
+  }
 
-  const objectUrl = URL.createObjectURL(file);
-  previewImg.src = objectUrl;
-  previewWrap.style.display = '';
-  scanProgress.textContent = 'Scanning for QR…';
-  scanHints.textContent = '';
+  async function handleImage(){
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
 
-  const dataUrl = await downscaleImage(file, 1600);
+    const objectUrl = URL.createObjectURL(file);
+    previewImg.src = objectUrl;
+    previewWrap.style.display = '';
+    scanProgress.textContent = 'Scanning for QR…';
+    scanHints.textContent = '';
 
-  // 1) Try QR first
-  const qr = await decodeQR(dataUrl);
-  if (qr && qr.data){
-    const parsed = parseQRPayload(qr.data);
-    applyParsed(parsed, /*source*/'QR');
+    const dataUrl = await downscaleImage(file, 1600);
+
+    // 1) Try QR first
+    const qr = await decodeQR(dataUrl);
+    if (qr && qr.data){
+      const parsed = parseQRPayload(qr.data);
+      applyParsed(parsed, 'QR');
+      URL.revokeObjectURL(objectUrl);
+      return;
+    }
+
+    // 2) OCR fallback
+    scanProgress.textContent = 'No QR. Running OCR…';
+    const rotated = await autoRotate(dataUrl);
+    const prepped = await lightPreprocess(rotated);
+    await runOCR(prepped);
+
     URL.revokeObjectURL(objectUrl);
-    return;
   }
 
-  // 2) OCR fallback
-  scanProgress.textContent = 'No QR. Running OCR…';
-  const rotated = await autoRotate(dataUrl);
-  const prepped = await lightPreprocess(rotated);
-  await runOCR(prepped);
+  /* -------------------- Address helpers (US-focused) -------------------- */
+  const US_STATES_ABBR = [
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
+    "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+    "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
+    "VA","WA","WV","WI","WY","DC","PR"
+  ];
+  const STATE_RE = `(?:${US_STATES_ABBR.join('|')})`;
+  const STREET_SUFFIX_RE = '(?:St|Street|Ave|Avenue|Blvd|Boulevard|Dr|Drive|Rd|Road|Ln|Lane|Way|Ct|Court|Pkwy|Parkway|Cir|Circle|Ter|Terrace|Pl|Place|Hwy|Highway|Trl|Trail|Run|Pass|Sq|Square|Loop)';
+  const DIR_RE = '(?:N|S|E|W|NE|NW|SE|SW)?';
+  const SUITE_RX = /\b(?:Suite|Ste\.?|Unit|Apt\.?|#)\s*\w+/i;
+  const STREET_RX = new RegExp(`^\\d{1,6}\\s+[A-Za-z0-9.'-]+(?:\\s+[A-Za-z0-9.'-]+)*\\s+${DIR_RE}\\s*${STREET_SUFFIX_RE}\\b\\.?`, 'i');
+  const CSZ_RX = new RegExp(`^[A-Za-z .'-]+,\\s*${STATE_RE}\\s*\\d{5}(?:-\\d{4})?$`);
+  const SINGLE_LINE_ADDR_RX = new RegExp(
+    `^\\d{1,6}\\s+.+?,\\s*[A-Za-z .'-]+,\\s*${STATE_RE}\\s*\\d{5}(?:-\\d{4})?$`, 'i'
+  );
 
-  URL.revokeObjectURL(objectUrl);
-}
+  function cleanAddr(str){
+    return (str || '')
+      .replace(/\s{2,}/g,' ')
+      .replace(/\s*,\s*/g, ', ')
+      .replace(/\s+/g,' ')
+      .trim();
+  }
+  function isLikelyStreet(line){ return STREET_RX.test(line); }
+  function isCSZ(line){ return CSZ_RX.test(line); }
+  function isSuite(line){ return SUITE_RX.test(line); }
+  function unescapeVCard(v){
+    return (v||'').replace(/\\n/gi,' ')
+                  .replace(/\\,/g, ',')
+                  .replace(/\\;/g, ';')
+                  .replace(/\s{2,}/g,' ')
+                  .trim();
+  }
 
-/* ---------- image helpers ---------- */
-function downscaleImage(file, maxW){
-  return new Promise((resolve,reject)=>{
-    const img = new Image(); let u='';
-    img.onload=()=>{
-      const r = Math.min(1, maxW/img.width);
-      const w = Math.round(img.width*r), h = Math.round(img.height*r);
-      const c = document.createElement('canvas'); c.width=w; c.height=h;
-      c.getContext('2d').drawImage(img,0,0,w,h);
-      URL.revokeObjectURL(u);
-      resolve(c.toDataURL('image/jpeg', .92));
-    };
-    img.onerror=reject;
-    u = URL.createObjectURL(file);
-    img.src = u;
-  });
-}
+  /* -------------------- Image helpers -------------------- */
+  function downscaleImage(file, maxW){
+    return new Promise((resolve,reject)=>{
+      const img = new Image(); let u='';
+      img.onload=()=>{
+        const r = Math.min(1, maxW/img.width);
+        const w = Math.round(img.width*r), h = Math.round(img.height*r);
+        const c = document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        URL.revokeObjectURL(u);
+        resolve(c.toDataURL('image/jpeg', .92));
+      };
+      img.onerror=reject;
+      u = URL.createObjectURL(file);
+      img.src = u;
+    });
+  }
 
-async function decodeQR(dataUrl){
-  const img = await loadImage(dataUrl);
-  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
-  const ctx = c.getContext('2d'); ctx.drawImage(img,0,0);
-  const {data, width, height} = ctx.getImageData(0,0,c.width,c.height);
-  return jsQR(data, width, height, { inversionAttempts: 'attemptBoth' });
-}
-
-function loadImage(src){
-  return new Promise((resolve,reject)=>{
-    const i = new Image(); i.onload=()=>resolve(i); i.onerror=reject; i.src=src;
-  });
-}
-
-async function autoRotate(dataUrl){
-  try{
-    const det = await Tesseract.detect(dataUrl);
-    const deg = det?.data?.orientation?.deg || 0;
-    if (!deg) return dataUrl;
+  async function decodeQR(dataUrl){
     const img = await loadImage(dataUrl);
-    const rad = deg * Math.PI/180, s=Math.abs(Math.sin(rad)), c=Math.abs(Math.cos(rad));
-    const w=img.width,h=img.height, W=Math.round(w*c+h*s), H=Math.round(w*s+h*c);
-    const cnv = document.createElement('canvas'); cnv.width=W; cnv.height=H;
-    const ctx = cnv.getContext('2d'); ctx.translate(W/2,H/2); ctx.rotate(rad);
-    ctx.drawImage(img,-w/2,-h/2);
-    return cnv.toDataURL('image/jpeg', .92);
-  }catch{ return dataUrl; }
-}
-
-// light grayscale preprocessing (keeps shapes; aggressive binarize can hurt)
-async function lightPreprocess(dataUrl){
-  const img = await loadImage(dataUrl);
-  const c = document.createElement('canvas'); c.width=img.width; c.height=img.height;
-  const ctx = c.getContext('2d'); ctx.drawImage(img,0,0);
-  const id = ctx.getImageData(0,0,c.width,c.height);
-  const d = id.data;
-  for (let i=0;i<d.length;i+=4){
-    const y = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
-    d[i]=d[i+1]=d[i+2]= y;
-  }
-  ctx.putImageData(id,0,0);
-  return c.toDataURL('image/png', 1);
-}
-
-/* ---------- company from email ---------- */
-const COMMON_FREE = ['gmail','yahoo','outlook','hotmail','icloud','aol','proton','msn','live','me','gmx','yandex','zoho'];
-const COMMON_SUBS = ['mail','email','mx','app','apps','portal','login','id','auth'];
-function companyFromEmail(email){
-  const dom = (email.split('@')[1]||'').toLowerCase();
-  if (!dom) return '';
-  let labels = dom.split('.');
-  // handle co.uk / com.au style
-  if (labels.length>=3 && labels.at(-1).length===2 && ['co','com','org','net'].includes(labels.at(-2))){
-    labels = labels.slice(0,-2);
-  }else{
-    labels = labels.slice(0,-1); // drop TLD
-  }
-  // drop common subdomains
-  while (labels.length>1 && COMMON_SUBS.includes(labels[0])) labels.shift();
-  const base = labels.at(-1) || '';
-  if (!base || COMMON_FREE.includes(base)) return '';
-  return titleCase(base.replace(/[-_]/g,' '));
-}
-
-/* ---------- name from email local part ---------- */
-function nameFromEmailLocal(local){
-  if (!local) return '';
-  const parts = local.split(/[._-]+/).filter(Boolean);
-  if (parts.length>=2){
-    return parts.map(titleCaseToken).join(' ');
-  }
-  // single token (e.g., jsmith, johns)
-  const t = local.replace(/\d+/g,'');
-  const m = t.match(/^([a-z])([a-z]{2,})$/i); // jsmith -> J Smith
-  if (m) return `${m[1].toUpperCase()} ${titleCase(m[2])}`;
-  return titleCase(t);
-}
-
-/* ---------- phone helpers (single primary) ---------- */
-function extractPhones(raw){
-  // labeled preferred, skip fax
-  const labeled = Array.from(raw.matchAll(/(?:mobile|cell|direct|main|m:|c:|d:)\s*[:\-]?\s*(\+?\d[\d\s().-]{7,}\d)/ig))
-                       .map(m=>m[1]);
-  const all = Array.from(raw.matchAll(/(?:\+?\d[\d\s().-]{7,}\d)/g)).map(m=>m[0]);
-  let nums = (labeled.length? labeled: all).filter(s=>!/fax/i.test(s));
-  // normalise and unique
-  const seen = new Set(); const out=[];
-  nums.forEach(n=>{
-    const k = n.replace(/[^\d+]/g,'');
-    if (k.length>=10 && !seen.has(k)){ seen.add(k); out.push(n); }
-  });
-  return out;
-}
-function formatPhone(s){
-  const digits = s.replace(/[^\d+]/g,'');
-  const m = digits.match(/^\+?1?(\d{10})(?:\D*(\d{1,5}))?$/);
-  if (m){
-    const base = `(${m[1].slice(0,3)}) ${m[1].slice(3,6)}-${m[1].slice(6)}`;
-    return m[2] ? `${base} x${m[2]}` : base;
-  }
-  return s.trim();
-}
-
-/* ---------- address extraction ---------- */
-function extractAddress(lines){
-  const cszRx = /^[A-Za-z .'-]+,\s*[A-Z]{2}\s*\d{5}(?:-\d{4})?$/; // City, ST 12345
-  const streetRx = /^\d{1,6}\s+[A-Za-z0-9.\- ]+\b(?:St|Street|Rd|Road|Ave|Avenue|Blvd|Drive|Dr|Ln|Lane|Way|Ct|Court|Pkwy|Parkway|Cir|Circle|Hwy|Highway)\b\.?/i;
-  const suiteRx = /\b(Suite|Ste\.?|Unit|#)\s*\w+/i;
-
-  // try "Address:" label first
-  const addrLbl = lines.findIndex(l=>/^address[:\s]/i.test(l));
-  if (addrLbl>=0){
-    let chunk = lines.slice(addrLbl+1, addrLbl+4);
-    const street = chunk.find(l=>streetRx.test(l)) || '';
-    const csz = chunk.find(l=>cszRx.test(l)) || '';
-    const suite = chunk.find(l=>suiteRx.test(l)) || '';
-    const a = [street, suite, csz].filter(Boolean).join(', ');
-    if (a) return a;
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const ctx = c.getContext('2d'); ctx.drawImage(img,0,0);
+    const {data, width, height} = ctx.getImageData(0,0,c.width,c.height);
+    return jsQR(data, width, height, { inversionAttempts: 'attemptBoth' });
   }
 
-  // City, ST ZIP then street above
-  const cidx = lines.findIndex(l=>cszRx.test(l));
-  if (cidx>=0){
-    let street=''; for (let i=cidx-1;i>=Math.max(0,cidx-3);i--){ if (streetRx.test(lines[i])){ street=lines[i]; break; } }
-    const suite = lines[cidx-1] && suiteRx.test(lines[cidx-1]) ? lines[cidx-1] : '';
-    return [street, suite, lines[cidx]].filter(Boolean).join(', ');
+  function loadImage(src){
+    return new Promise((resolve,reject)=>{
+      const i = new Image(); i.onload=()=>resolve(i); i.onerror=reject; i.src=src;
+    });
   }
 
-  // fallback: first plausible street + next two lines
-  const sIdx = lines.findIndex(l=>streetRx.test(l));
-  if (sIdx>=0){
-    const vs=[lines[sIdx]];
-    if (lines[sIdx+1]) vs.push(lines[sIdx+1]);
-    if (lines[sIdx+2]) vs.push(lines[sIdx+2]);
-    return vs.join(', ');
+  async function autoRotate(dataUrl){
+    try{
+      const det = await Tesseract.detect(dataUrl);
+      const deg = det?.data?.orientation?.deg || 0;
+      if (!deg) return dataUrl;
+      const img = await loadImage(dataUrl);
+      const rad = deg * Math.PI/180, s=Math.abs(Math.sin(rad)), c=Math.abs(Math.cos(rad));
+      const w=img.width,h=img.height, W=Math.round(w*c+h*s), H=Math.round(w*s+h*c);
+      const cnv = document.createElement('canvas'); cnv.width=W; cnv.height=H;
+      const ctx = cnv.getContext('2d'); ctx.translate(W/2,H/2); ctx.rotate(rad);
+      ctx.drawImage(img,-w/2,-h/2);
+      return cnv.toDataURL('image/jpeg', .92);
+    }catch{ return dataUrl; }
   }
-  return '';
-}
 
-/* ---------- QR payload parsing ---------- */
-function parseQRPayload(s){
-  const values = {company:'', name:'', email:'', phone:'', address:''};
-  let source = 'QR';
+  // light grayscale preprocessing
+  async function lightPreprocess(dataUrl){
+    const img = await loadImage(dataUrl);
+    const c = document.createElement('canvas'); c.width=img.width; c.height=img.height;
+    const ctx = c.getContext('2d'); ctx.drawImage(img,0,0);
+    const id = ctx.getImageData(0,0,c.width,c.height);
+    const d = id.data;
+    for (let i=0;i<d.length;i+=4){
+      const y = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+      d[i]=d[i+1]=d[i+2]= y;
+    }
+    ctx.putImageData(id,0,0);
+    return c.toDataURL('image/png', 1);
+  }
 
-  if (/^BEGIN:VCARD/i.test(s)){
-    const lines = s.split(/\r?\n/);
-    for (const line of lines){
-      const [k, ...rest] = line.split(':');
-      const val = rest.join(':').trim();
-      if (!val) continue;
-      const key = (k||'').toUpperCase();
+  /* -------------------- Company/name/phone helpers -------------------- */
+  const COMMON_FREE = ['gmail','yahoo','outlook','hotmail','icloud','aol','proton','msn','live','me','gmx','yandex','zoho'];
+  const COMMON_SUBS = ['mail','email','mx','app','apps','portal','login','id','auth'];
+  function companyFromEmail(email){
+    const dom = (email.split('@')[1]||'').toLowerCase();
+    if (!dom) return '';
+    let labels = dom.split('.');
+    if (labels.length>=3 && labels.at(-1).length===2 && ['co','com','org','net'].includes(labels.at(-2))){
+      labels = labels.slice(0,-2);
+    }else{
+      labels = labels.slice(0,-1);
+    }
+    while (labels.length>1 && COMMON_SUBS.includes(labels[0])) labels.shift();
+    const base = labels.at(-1) || '';
+    if (!base || COMMON_FREE.includes(base)) return '';
+    return titleCase(base.replace(/[-_]/g,' '));
+  }
+  function nameFromEmailLocal(local){
+    if (!local) return '';
+    const parts = local.split(/[._-]+/).filter(Boolean);
+    if (parts.length>=2) return parts.map(titleCaseToken).join(' ');
+    const t = local.replace(/\d+/g,'');
+    const m = t.match(/^([a-z])([a-z]{2,})$/i);
+    if (m) return `${m[1].toUpperCase()} ${titleCase(m[2])}`;
+    return titleCase(t);
+  }
+  function extractPhones(raw){
+    const labeled = Array.from(raw.matchAll(/(?:mobile|cell|direct|main|m:|c:|d:)\s*[:\-]?\s*(\+?\d[\d\s().-]{7,}\d)/ig)).map(m=>m[1]);
+    const all = Array.from(raw.matchAll(/(?:\+?\d[\d\s().-]{7,}\d)/g)).map(m=>m[0]);
+    let nums = (labeled.length? labeled: all).filter(s=>!/fax/i.test(s));
+    const seen = new Set(); const out=[];
+    nums.forEach(n=>{
+      const k = n.replace(/[^\d+]/g,'');
+      if (k.length>=10 && !seen.has(k)){ seen.add(k); out.push(n); }
+    });
+    return out;
+  }
+  function formatPhone(s){
+    const digits = s.replace(/[^\d+]/g,'');
+    const m = digits.match(/^\+?1?(\d{10})(?:\D*(\d{1,5}))?$/);
+    if (m){
+      const base = `(${m[1].slice(0,3)}) ${m[1].slice(3,6)}-${m[1].slice(6)}`;
+      return m[2] ? `${base} x${m[2]}` : base;
+    }
+    return s.trim();
+  }
+  function titleCaseToken(w){ return w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w; }
+  function titleCase(s){ return s.split(' ').map(titleCaseToken).join(' '); }
+  function cleanCompany(s){ return s.replace(/\s{2,}/g,' ').replace(/\s+[|·\-–]\s+.*$/, '').trim(); }
 
-      if (key.startsWith('FN'))       values.name = values.name || val;
-      else if (key.startsWith('N:'))  values.name = values.name || val.split(';').filter(Boolean).join(' ');
-      else if (key.startsWith('ORG')) values.company = values.company || val;
-      else if (key.startsWith('EMAIL')) values.email = values.email || val;
-      else if (key.startsWith('TEL'))   values.phone = values.phone || val;
-      else if (key.startsWith('ADR')){
-        const parts = val.split(';'); // PO;EXT;STREET;CITY;REGION;POSTAL;COUNTRY
-        const street = parts[2]||'', city=parts[3]||'', region=parts[4]||'', postal=parts[5]||'', country=parts[6]||'';
-        const addr = [street, city, region && postal ? `${region} ${postal}` : region||postal, country].filter(Boolean).join(', ');
-        if (addr) values.address = values.address || addr;
+  /* -------------------- Address extraction -------------------- */
+  function extractAddress(lines){
+    if (!lines || !lines.length) return '';
+    const safe = lines
+      .map(l => l.replace(/[•·▪●]/g, ' ').trim())
+      .filter(l => l && !/(@|https?:\/\/|www\.)/i.test(l));
+
+    // A) single line address
+    const single = safe.find(l => SINGLE_LINE_ADDR_RX.test(l));
+    if (single) return cleanAddr(single);
+
+    // B) multi-line window Street → (Suite) → City, ST ZIP
+    let best = {score:-1, text:''};
+    for (let i=0; i<safe.length; i++){
+      const line = safe[i];
+      if (isLikelyStreet(line)){
+        let suite = '', csz = '';
+        for (let j=i+1; j<=i+3 && j<safe.length; j++){
+          if (!suite && isSuite(safe[j])) suite = safe[j];
+          if (!csz && isCSZ(safe[j])) csz = safe[j];
+        }
+        const s1 = cleanAddr([line, csz].filter(Boolean).join(', '));
+        const s2 = cleanAddr([line, suite, csz].filter(Boolean).join(', '));
+        const base = 3;
+        const score1 = base + (csz?6:0);
+        const score2 = base + (csz?6:0) + (suite?2:0);
+        if (s2 && score2 > best.score) best = {score:score2, text:s2};
+        if (s1 && score1 > best.score) best = {score:score1, text:s1};
+      }
+      if (isCSZ(line)){
+        let street = '';
+        for (let k=i-1; k>=Math.max(0, i-3); k--){
+          if (isLikelyStreet(safe[k])){ street = safe[k]; break; }
+        }
+        const maybeSuite = (i-1 >= 0 && isSuite(safe[i-1])) ? safe[i-1] : '';
+        const cand = cleanAddr([street, maybeSuite, line].filter(Boolean).join(', '));
+        const score = (street?3:0) + 6 + (maybeSuite?2:0);
+        if (cand && score > best.score) best = {score, text:cand};
       }
     }
-  } else if (/^MECARD:/i.test(s)){
-    const body = s.replace(/^MECARD:/i,'').replace(/;$/, '');
-    for (const part of body.split(';')){
-      const [k,v] = part.split(':'); if (!v) continue;
-      const key = k.toUpperCase();
-      if (key === 'N') values.name = values.name || v.replace(/,/g,' ');
-      else if (key === 'TEL') values.phone = values.phone || v;
-      else if (key === 'EMAIL') values.email = values.email || v;
-      else if (key === 'ORG') values.company = values.company || v;
-      else if (key === 'ADR') values.address = values.address || v;
-    }
-  } else if (/^https?:\/\//i.test(s)){
-    try{
-      const u = new URL(s);
-      values.email = values.email || u.searchParams.get('email') || u.searchParams.get('e') || '';
-      values.name  = values.name  || u.searchParams.get('name')  || u.searchParams.get('n') || '';
-      values.phone = values.phone || u.searchParams.get('tel')   || u.searchParams.get('phone') || '';
-      values.company = values.company || u.searchParams.get('org') || u.searchParams.get('company') || '';
-      values.address = values.address || u.searchParams.get('addr') || u.searchParams.get('address') || '';
-    }catch{}
+    if (best.text) return best.text;
+    const loneStreet = safe.find(isLikelyStreet);
+    if (loneStreet) return cleanAddr(loneStreet);
+    return '';
   }
 
-  // Post-process: enforce company from email domain if present
-  if (values.email){
-    const forcedCo = companyFromEmail(values.email);
-    if (forcedCo) values.company = forcedCo;
-    // Improve name from email if empty
-    if (!values.name){
+  /* -------------------- QR payload parsing -------------------- */
+  function parseQRPayload(s){
+    const values = {company:'', name:'', email:'', phone:'', address:''};
+
+    if (/^BEGIN:VCARD/i.test(s)){
+      const lines = s.split(/\r?\n/).map(unescapeVCard);
+      for (const rawLine of lines){
+        const [k, ...rest] = rawLine.split(':');
+        if (!k) continue;
+        const key = k.toUpperCase();
+        const val = unescapeVCard(rest.join(':'));
+        if (!val) continue;
+
+        if (key.startsWith('FN'))       values.name = values.name || val;
+        else if (key.startsWith('N:'))  values.name = values.name || val.split(';').filter(Boolean).join(' ');
+        else if (key.startsWith('ORG')) values.company = values.company || val;
+        else if (key.startsWith('EMAIL')) values.email = values.email || val;
+        else if (key.startsWith('TEL') && !/fax/i.test(k)) values.phone = values.phone || val;
+        else if (key.startsWith('ADR')){
+          if (key.includes('LABEL=')){
+            const lab = key.split('LABEL=')[1]?.replace(/^["']|["']$/g,'') || '';
+            if (lab) values.address = values.address || unescapeVCard(lab);
+          }
+          const parts = val.split(';');
+          const street = parts[2]||'';
+          const city   = parts[3]||'';
+          const region = parts[4]||'';
+          const postal = parts[5]||'';
+          const country= parts[6]||'';
+          const addr = [street, city, (region&&postal)?`${region} ${postal}`:(region||postal), country].filter(Boolean).join(', ');
+          if (addr) values.address = values.address || addr;
+        }
+      }
+    } else if (/^MECARD:/i.test(s)){
+      const body = s.replace(/^MECARD:/i,'').replace(/;$/, '');
+      for (const part of body.split(';')){
+        const [k,v] = part.split(':'); if (!v) continue;
+        const key = k.toUpperCase(); const val = unescapeVCard(v);
+        if (key === 'N') values.name = values.name || val.replace(/,/g,' ');
+        else if (key === 'TEL' && !/fax/i.test(k)) values.phone = values.phone || val;
+        else if (key === 'EMAIL') values.email = values.email || val;
+        else if (key === 'ORG') values.company = values.company || val;
+        else if (key === 'ADR') values.address = values.address || val;
+      }
+    } else if (/^https?:\/\//i.test(s)){
+      try{
+        const u = new URL(s);
+        values.email = values.email || u.searchParams.get('email') || u.searchParams.get('e') || '';
+        values.name  = values.name  || u.searchParams.get('name')  || u.searchParams.get('n') || '';
+        values.phone = values.phone || u.searchParams.get('tel')   || u.searchParams.get('phone') || '';
+        values.company = values.company || u.searchParams.get('org') || u.searchParams.get('company') || '';
+        values.address = values.address || u.searchParams.get('addr') || u.searchParams.get('address') || '';
+      }catch{}
+    } else {
+      const mEmail = s.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      if (mEmail) values.email = mEmail[0];
+      const mPhone = s.match(/(?:\+?\d[\d\s().-]{7,}\d)/);
+      if (mPhone)  values.phone = mPhone[0];
+    }
+
+    // Post-process per your rules:
+    if (values.email){
+      const forcedCo = companyFromEmail(values.email);
+      if (forcedCo) values.company = forcedCo;
+      if (!values.name){
+        const local = values.email.split('@')[0]||'';
+        values.name = nameFromEmailLocal(local);
+      }
+    }
+    if (values.phone) values.phone = formatPhone(values.phone);
+    if (!values.address){
+      const addrTry = extractAddress((s||'').split(/\r?\n/).map(unescapeVCard));
+      if (addrTry) values.address = addrTry;
+    }
+    return { values, source: 'QR' };
+  }
+
+  /* -------------------- OCR fallback -------------------- */
+  async function runOCR(dataUrl){
+    try{
+      const worker = await Tesseract.createWorker('eng', 1, {
+        logger: m => { if (m.status==='recognizing text'){ scanProgress.textContent = `OCR… ${(m.progress*100|0)}%`; } }
+      });
+      await worker.setParameters({ tessedit_pageseg_mode: '6', user_defined_dpi: '300' });
+      const { data: { text } } = await worker.recognize(dataUrl);
+      await worker.terminate();
+      const parsed = parseFromText(text||'');
+      applyParsed(parsed, 'OCR');
+    }catch(e){
+      console.error(e);
+      scanProgress.textContent = 'Scan failed. You can still type fields.';
+      scanHints.textContent = 'Tip: bright light, flat card, fill the frame.';
+    }
+  }
+
+  function parseFromText(raw){
+    const lines = (raw||'').split('\n').map(l=>l.trim()).filter(Boolean);
+    const values = {company:'', name:'', email:'', phone:'', address:''};
+
+    const e = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    if (e) values.email = e[0];
+
+    const phones = extractPhones(raw);
+    if (phones.length) values.phone = formatPhone(phones[0]);
+
+    if (values.email){
+      const forced = companyFromEmail(values.email);
+      if (forced) values.company = forced;
+    } else {
+      const orgIdx = lines.findIndex(l => /\b(LLC|INC\.?|CORP\.?|CO\.?|COMPANY|INDUSTRIES|HOLDINGS|GROUP|LTD|LLP)\b/i.test(l));
+      if (orgIdx>=0) values.company = cleanCompany(lines[orgIdx]);
+      if (!values.company){
+        const upper = lines.find(l => l.length>3 && l===l.toUpperCase() && !/\d|@|http|www/i.test(l));
+        if (upper) values.company = cleanCompany(upper);
+      }
+    }
+
+    if (values.email && !values.name){
       const local = values.email.split('@')[0]||'';
       values.name = nameFromEmailLocal(local);
     }
-  }
-
-  // Phone: keep only one primary
-  if (values.phone){
-    values.phone = formatPhone(values.phone);
-  }
-
-  return {values, source};
-}
-
-/* ---------- OCR fallback (single primary phone, company from email) ---------- */
-async function runOCR(dataUrl){
-  try{
-    const worker = await Tesseract.createWorker('eng', 1, {
-      logger: m => { if (m.status==='recognizing text'){ scanProgress.textContent = `OCR… ${(m.progress*100|0)}%`; } }
-    });
-    await worker.setParameters({ tessedit_pageseg_mode: '6', user_defined_dpi: '300' });
-    const { data: { text } } = await worker.recognize(dataUrl);
-    await worker.terminate();
-
-    const parsed = parseFromText(text||'');
-    applyParsed(parsed, 'OCR');
-  }catch(e){
-    console.error(e);
-    scanProgress.textContent = 'Scan failed. You can still type fields.';
-    scanHints.textContent = 'Tip: bright light, flat card, fill the frame.';
-  }
-}
-
-function parseFromText(raw){
-  const lines = (raw||'').split('\n').map(l=>l.trim()).filter(Boolean);
-  const values = {company:'', name:'', email:'', phone:'', address:''};
-
-  // EMAIL
-  const e = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  if (e) values.email = e[0];
-
-  // PHONE (single best)
-  const phones = extractPhones(raw);
-  if (phones.length) values.phone = formatPhone(phones[0]);
-
-  // COMPANY: ALWAYS from email domain if possible (per your request)
-  if (values.email){
-    const forced = companyFromEmail(values.email);
-    if (forced) values.company = forced;
-  } else {
-    // fallback: ALL CAPS or org suffix near top
-    const orgIdx = lines.findIndex(l => /\b(LLC|INC\.?|CORP\.?|CO\.?|COMPANY|INDUSTRIES|HOLDINGS|GROUP|LTD|LLP)\b/i.test(l));
-    if (orgIdx>=0) values.company = cleanCompany(lines[orgIdx]);
-    if (!values.company){
-      const upper = lines.find(l => l.length>3 && l===l.toUpperCase() && !/\d|@|http|www/i.test(l));
-      if (upper) values.company = cleanCompany(upper);
+    if (!values.name){
+      const TITLE = /owner|founder|ceo|cfo|coo|cto|vp|manager|director|sales|account|engineer|operations|marketing|service|technician|advisor|consultant/i;
+      const nameIdx = lines.findIndex(l => /^[A-Z][a-z]+(?:[-\s'][A-Z][a-z]+)+$/.test(l) && !TITLE.test(l));
+      if (nameIdx>=0) values.name = lines[nameIdx];
     }
+
+    const address = extractAddress(lines);
+    if (address) values.address = address;
+
+    return {values, source:'OCR'};
   }
 
-  // NAME
-  if (values.email && !values.name){
-    const local = values.email.split('@')[0]||'';
-    values.name = nameFromEmailLocal(local);
+  /* -------------------- apply to form -------------------- */
+  function applyParsed(parsed, source){
+    const v = parsed.values || {};
+    if (v.company && !fCompany.value){ fCompany.value = v.company; showBadge(bCompany, true); }
+    if (v.name    && !fName.value){    fName.value    = v.name;    showBadge(bName, true); }
+    if (v.email   && !fEmail.value){   fEmail.value   = v.email;   showBadge(bEmail, true); }
+    if (v.phone   && !fPhone.value){   fPhone.value   = v.phone;   showBadge(bPhone, true); }
+    if (v.address && !fAddr.value){    fAddr.value    = v.address; showBadge(bAddr, true); }
+
+    scanProgress.textContent = `${source} parsed. Review & save.`;
+    const hints = [];
+    if (v.company) hints.push('company'); if (v.name) hints.push('name');
+    if (v.email) hints.push('email'); if (v.phone) hints.push('phone'); if (v.address) hints.push('address');
+    scanHints.textContent = `Source: ${source}${hints.length? ' ('+hints.join(', ')+')' : ''}`;
+
+    const form = document.getElementById('newcall-form');
+    if (form){ form.scrollIntoView({behavior:'smooth', block:'start'}); }
   }
-  if (!values.name){
-    const TITLE = /owner|founder|ceo|cfo|coo|cto|vp|manager|director|sales|account|engineer|operations|marketing|service|technician|advisor|consultant/i;
-    const nameIdx = lines.findIndex(l => /^[A-Z][a-z]+(?:[-\s'][A-Z][a-z]+)+$/.test(l) && !TITLE.test(l));
-    if (nameIdx>=0) values.name = lines[nameIdx];
-  }
-
-  // ADDRESS
-  const address = extractAddress(lines);
-  if (address) values.address = address;
-
-  return {values, source:'OCR'};
-}
-
-/* ---------- apply to form ---------- */
-function applyParsed(parsed, source){
-  const v = parsed.values || {};
-  if (v.company && !fCompany.value){ fCompany.value = v.company; showBadge(bCompany, true); }
-  if (v.name    && !fName.value){    fName.value    = v.name;    showBadge(bName, true); }
-  if (v.email   && !fEmail.value){   fEmail.value   = v.email;   showBadge(bEmail, true); }
-  if (v.phone   && !fPhone.value){   fPhone.value   = v.phone;   showBadge(bPhone, true); }
-  if (v.address && !fAddr.value){    fAddr.value    = v.address; showBadge(bAddr, true); }
-
-  scanProgress.textContent = `${source} parsed. Review & save.`;
-  const hints = [];
-  if (v.company) hints.push('company'); if (v.name) hints.push('name');
-  if (v.email) hints.push('email'); if (v.phone) hints.push('phone'); if (v.address) hints.push('address');
-  scanHints.textContent = `Source: ${source}${hints.length? ' ('+hints.join(', ')+')' : ''}`;
-
-  // Scroll form into view on mobile
-  const form = document.getElementById('newcall-form');
-  if (form){ form.scrollIntoView({behavior:'smooth', block:'start'}); }
-}
-
-/* ---------- small string helpers ---------- */
-function cleanCompany(s){ return s.replace(/\s{2,}/g,' ').replace(/\s+[|·\-–]\s+.*$/, '').trim(); }
-function titleCaseToken(w){ return w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w; }
-function titleCase(s){ return s.split(' ').map(titleCaseToken).join(' '); }
-</script>
+  </script>
 </body>
 </html>
