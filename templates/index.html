@@ -297,161 +297,288 @@
     }
   </script>
 
-  <!-- ====== ADDED: Tesseract.js + OCR autofill for business card scan ====== -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script>
-    // Business card scan logic
-    const scanBtn = document.getElementById('scanBtn');
-    const fileInput = document.getElementById('cardInput');
-    const previewWrap = document.getElementById('scanPreview');
-    const previewImg = document.getElementById('cardPreview');
-    const scanProgress = document.getElementById('scanProgress');
-    const scanHints = document.getElementById('scanHints');
+<!-- Tesseract.js -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+  // ===== Improved business card scan (orientation + preprocessing + smarter parsing) =====
 
-    const fCompany = document.getElementById('company');
-    const fName    = document.getElementById('contact_name');
-    const fEmail   = document.getElementById('email');
-    const fPhone   = document.getElementById('phone');
-    const fAddr    = document.getElementById('address');
+  const scanBtn = document.getElementById('scanBtn');
+  const fileInput = document.getElementById('cardInput');
+  const previewWrap = document.getElementById('scanPreview');
+  const previewImg = document.getElementById('cardPreview');
+  const scanProgress = document.getElementById('scanProgress');
+  const scanHints = document.getElementById('scanHints');
 
-    const bCompany = document.getElementById('badgeCompany');
-    const bName    = document.getElementById('badgeName');
-    const bEmail   = document.getElementById('badgeEmail');
-    const bPhone   = document.getElementById('badgePhone');
-    const bAddr    = document.getElementById('badgeAddress');
+  const fCompany = document.getElementById('company');
+  const fName    = document.getElementById('contact_name');
+  const fEmail   = document.getElementById('email');
+  const fPhone   = document.getElementById('phone');
+  const fAddr    = document.getElementById('address');
 
-    function showBadge(el, show){ if(el) el.style.display = show ? '' : 'none'; }
+  const bCompany = document.getElementById('badgeCompany');
+  const bName    = document.getElementById('badgeName');
+  const bEmail   = document.getElementById('badgeEmail');
+  const bPhone   = document.getElementById('badgePhone');
+  const bAddr    = document.getElementById('badgeAddress');
 
-    if (scanBtn && fileInput){
-      scanBtn.addEventListener('click', () => fileInput.click());
-      fileInput.addEventListener('change', handleImageSelect);
-    }
+  function showBadge(el, show){ if(el) el.style.display = show ? '' : 'none'; }
 
-    async function handleImageSelect(){
-      const file = fileInput.files && fileInput.files[0];
-      if (!file) return;
+  if (scanBtn && fileInput){
+    scanBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleImageSelect);
+  }
 
-      // Preview
-      const objectUrl = URL.createObjectURL(file);
-      previewImg.src = objectUrl;
-      previewWrap.style.display = '';
-      scanProgress.textContent = 'Scanning…';
-      scanHints.textContent = '';
+  async function handleImageSelect(){
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
 
-      // Downscale for faster OCR
-      const dataUrl = await downscaleImage(file, 1600);
-      await runOCR(dataUrl);
+    const objectUrl = URL.createObjectURL(file);
+    previewImg.src = objectUrl;
+    previewWrap.style.display = '';
+    scanProgress.textContent = 'Scanning…';
+    scanHints.textContent = '';
 
-      // Cleanup
-      URL.revokeObjectURL(objectUrl);
-    }
+    // Downscale for speed
+    const dataUrl = await downscaleImage(file, 1600);
 
-    function downscaleImage(file, maxW){
-      return new Promise((resolve,reject)=>{
-        const img = new Image();
-        let localURL = '';
-        img.onload = ()=>{
-          const ratio = Math.min(1, maxW / img.width);
-          const w = Math.round(img.width * ratio);
-          const h = Math.round(img.height * ratio);
-          const canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, w, h);
-          URL.revokeObjectURL(localURL);
-          resolve(canvas.toDataURL('image/jpeg', 0.9));
-        };
-        img.onerror = reject;
-        localURL = URL.createObjectURL(file);
-        img.src = localURL;
-      });
-    }
+    // Detect orientation and rotate if needed, then preprocess
+    const rotated = await autoRotate(dataUrl);
+    const prepped = await preprocessImage(rotated);
 
-    async function runOCR(dataUrl){
-      try{
-        const worker = await Tesseract.createWorker('eng', 1, {
-          logger: m => {
-            if (m.status === 'recognizing text' && m.progress != null){
-              scanProgress.textContent = `Scanning… ${(m.progress*100).toFixed(0)}%`;
-            }
+    await runOCR(prepped);
+
+    URL.revokeObjectURL(objectUrl);
+  }
+
+  function downscaleImage(file, maxW){
+    return new Promise((resolve,reject)=>{
+      const img = new Image();
+      let localURL = '';
+      img.onload = ()=>{
+        const ratio = Math.min(1, maxW / img.width);
+        const w = Math.round(img.width * ratio);
+        const h = Math.round(img.height * ratio);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(localURL);
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = reject;
+      localURL = URL.createObjectURL(file);
+      img.src = localURL;
+    });
+  }
+
+  async function autoRotate(dataUrl){
+    try{
+      const det = await Tesseract.detect(dataUrl);
+      const deg = (det && det.data && det.data.orientation && det.data.orientation.deg) || 0;
+      if (!deg) return dataUrl;
+      return await rotateImage(dataUrl, deg);
+    }catch{ return dataUrl; }
+  }
+
+  function rotateImage(dataUrl, deg){
+    return new Promise((resolve)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const rad = deg * Math.PI / 180;
+        const sin = Math.abs(Math.sin(rad)), cos = Math.abs(Math.cos(rad));
+        const w = img.width, h = img.height;
+        const newW = Math.round(w*cos + h*sin);
+        const newH = Math.round(w*sin + h*cos);
+        const canvas = document.createElement('canvas');
+        canvas.width = newW; canvas.height = newH;
+        const ctx = canvas.getContext('2d');
+        ctx.translate(newW/2, newH/2);
+        ctx.rotate(rad);
+        ctx.drawImage(img, -w/2, -h/2);
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  // Simple image preprocessing: grayscale + contrast + binarize
+  function preprocessImage(dataUrl){
+    return new Promise((resolve)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0,0,c.width,c.height);
+        const d = imageData.data;
+
+        // grayscale + light contrast
+        for (let i=0;i<d.length;i+=4){
+          const r=d[i],g=d[i+1],b=d[i+2];
+          let y = 0.299*r + 0.587*g + 0.114*b;
+          // contrast 1.2, brightness +5
+          y = (y-128)*1.2 + 133;
+          d[i]=d[i+1]=d[i+2]=y;
+        }
+        ctx.putImageData(imageData,0,0);
+
+        // quick binarize by mean threshold (fast & good enough for cards)
+        const id2 = ctx.getImageData(0,0,c.width,c.height);
+        const p = id2.data;
+        let sum=0, n=p.length/4;
+        for(let i=0;i<p.length;i+=4) sum += p[i];
+        const thr = sum/n; // mean
+        for(let i=0;i<p.length;i+=4){
+          const v = p[i] > thr ? 255 : 0;
+          p[i]=p[i+1]=p[i+2]=v;
+        }
+        ctx.putImageData(id2,0,0);
+
+        resolve(c.toDataURL('image/png', 1.0));
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  async function runOCR(preppedDataUrl){
+    try{
+      const worker = await Tesseract.createWorker('eng', 1, {
+        logger: m => {
+          if (m.status === 'recognizing text' && m.progress != null){
+            scanProgress.textContent = `Scanning… ${(m.progress*100).toFixed(0)}%`;
           }
+        }
+      });
+
+      // Better defaults for business cards
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6',  // Assume a single uniform block of text
+        user_defined_dpi: '300'
+      });
+
+      // First pass (general)
+      const { data: { text } } = await worker.recognize(preppedDataUrl);
+
+      // Parse
+      let parsed = parseBusinessCard(text || '');
+
+      // If email/phone missing, second pass with whitelist helps reduce OCR confusions
+      if (!parsed.email || !parsed.phone){
+        await worker.setParameters({
+          tessedit_pageseg_mode: '6',
+          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@._+-()[]{}<>:;/\\|~`!#$%^&*=,?- '
         });
-        const { data: { text } } = await worker.recognize(dataUrl);
-        await worker.terminate();
-
-        scanProgress.textContent = 'Parsing details…';
-        const parsed = parseBusinessCard(text || '');
-        fillFields(parsed);
-        scanProgress.textContent = 'Done. Review & save.';
-        scanHints.innerHTML = (parsed._hints || []).join(' · ');
-      }catch(err){
-        console.error(err);
-        scanProgress.textContent = 'Scan failed. You can still type fields manually.';
-        scanHints.textContent = 'Tip: Retake the photo in good light, flat card.';
+        const { data: { text: text2 } } = await worker.recognize(preppedDataUrl);
+        const parsed2 = parseBusinessCard(text2 || '');
+        parsed = mergeParsed(parsed, parsed2);
       }
+
+      await worker.terminate();
+
+      scanProgress.textContent = 'Done. Review & save.';
+      fillFields(parsed);
+      scanHints.innerHTML = (parsed._hints || []).join(' · ');
+
+    }catch(err){
+      console.error(err);
+      scanProgress.textContent = 'Scan failed. You can still type fields manually.';
+      scanHints.textContent = 'Tip: Retake the photo in good light, fill the frame, avoid glare.';
     }
+  }
 
-    // Heuristic parsing
-    function parseBusinessCard(raw){
-      const lines = (raw || '').replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
-      const out = { company:'', name:'', email:'', phone:'', address:'', _hints:[] };
+  // ===== Smarter parsing =====
+  function parseBusinessCard(raw){
+    const lines = (raw || '').replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
+    const out = { company:'', name:'', email:'', phone:'', address:'', _hints:[] };
 
-      // Email
-      const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-      if (emailMatch) out.email = emailMatch[0];
+    // Email
+    const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    if (emailMatch) out.email = emailMatch[0];
 
-      // Phone
-      const phoneMatch = raw.match(/(?:\+?\d[\d\s().-]{7,}\d)/);
-      if (phoneMatch){ out.phone = normalisePhone(phoneMatch[0]); }
+    // Phone: prefer labels (mobile/cell) if present
+    const phoneCandidates = (raw.match(/(?:mobile|cell|m:|c:)\s*[:\-]?\s*(\+?\d[\d\s().-]{7,}\d)/ig) || [])
+      .map(s=>s.replace(/(?:mobile|cell|m:|c:)\s*[:\-]?\s*/i,'').trim());
+    if (!phoneCandidates.length){
+      const all = raw.match(/(?:\+?\d[\d\s().-]{7,}\d)/g) || [];
+      if (all.length) phoneCandidates.push(all[0]);
+    }
+    if (phoneCandidates.length) out.phone = normalisePhone(phoneCandidates[0]);
 
-      // Company
-      const corpIdx = lines.findIndex(l => /\b(LLC|INC\.?|CORP\.?|CO\.?|COMPANY|INDUSTRIES|HOLDINGS)\b/i.test(l));
-      if (corpIdx >= 0) out.company = cleanCompany(lines[corpIdx]);
+    // Company: explicit Inc/LLC/etc or ALL CAPS
+    const corpIdx = lines.findIndex(l => /\b(LLC|INC\.?|CORP\.?|CO\.?|COMPANY|INDUSTRIES|HOLDINGS)\b/i.test(l));
+    if (corpIdx >= 0) out.company = cleanCompany(lines[corpIdx]);
+    if (!out.company){
+      const upper = lines.find(l => l.length>2 && l === l.toUpperCase() && !/\d/.test(l));
+      if (upper) out.company = cleanCompany(upper);
+    }
+    if (!out.company && lines[0]) out.company = cleanCompany(lines[0]);
+
+    // Name: proper case with 2+ words
+    const nameIdx = lines.findIndex(l => /^[A-Z][a-z]+(?:[-\s'][A-Z][a-z]+)+$/.test(l));
+    if (nameIdx >= 0) out.name = lines[nameIdx];
+
+    // Address: street suffix or number + street
+    const addrIdx = lines.findIndex(l => /\b(AVE|AVENUE|ST|STREET|RD|ROAD|BLVD|DR|DRIVE|LN|LANE|HWY|PKWY|SUITE|STE|FLOOR|FL|BLDG|UNIT)\b/i.test(l) || /\d{3,}\s+[A-Za-z]/.test(l));
+    if (addrIdx >= 0) out.address = lines.slice(addrIdx, addrIdx+2).join(', ');
+
+    // Derive missing pieces from email
+    if (out.email){
       if (!out.company){
-        const upper = lines.find(l => l.length>2 && l === l.toUpperCase() && !/\d/.test(l));
-        if (upper) out.company = cleanCompany(upper);
+        const dom = out.email.split('@')[1] || '';
+        const base = (dom.split('.')[0] || '').replace(/-/g,' ');
+        if (base && base.length>2) out.company = titleCase(base);
       }
-      if (!out.company && lines[0]) out.company = cleanCompany(lines[0]);
-
-      // Name (two+ proper words)
-      const nameIdx = lines.findIndex(l => /^[A-Z][a-z]+(?:[-\s'][A-Z][a-z]+)+$/.test(l));
-      if (nameIdx >= 0) out.name = lines[nameIdx];
-
-      // Address (street suffix or number + street)
-      const addrIdx = lines.findIndex(l => /\b(AVE|AVENUE|ST|STREET|RD|ROAD|BLVD|DR|DRIVE|LN|LANE|HWY|SUITE|STE|FLOOR|BLDG|UNIT)\b/i.test(l) || /\d{3,} [A-Za-z]/.test(l));
-      if (addrIdx >= 0){ out.address = lines.slice(addrIdx, addrIdx+2).join(', '); }
-
-      if (out.email) out._hints.push('email');
-      if (out.phone) out._hints.push('phone');
-      if (out.name) out._hints.push('name');
-      if (out.company) out._hints.push('company');
-      if (out.address) out._hints.push('address');
-
-      return out;
+      if (!out.name){
+        const user = out.email.split('@')[0] || '';
+        const parts = user.split(/[._-]+/).filter(p=>p.length>1 && !/^\d+$/.test(p));
+        if (parts.length>=2) out.name = parts.map(titleCase).join(' ');
+      }
     }
 
-    function normalisePhone(s){
-      const digits = s.replace(/[^\d+]/g,'');
-      // format US-like if possible
-      const m = digits.match(/^\+?1?(\d{10})$/);
-      if (m){ return `(${m[1].slice(0,3)}) ${m[1].slice(3,6)}-${m[1].slice(6)}`; }
-      return s.trim();
-    }
-    function cleanCompany(s){
-      return s.replace(/\s{2,}/g,' ').replace(/\s+[|·\-–]\s+.*$/, '').trim();
-    }
+    if (out.email) out._hints.push('email');
+    if (out.phone) out._hints.push('phone');
+    if (out.name) out._hints.push('name');
+    if (out.company) out._hints.push('company');
+    if (out.address) out._hints.push('address');
 
-    function fillFields(p){
-      if (p.company && fCompany && !fCompany.value){ fCompany.value = p.company; showBadge(bCompany,true); }
-      if (p.name && fName && !fName.value){ fName.value = p.name; showBadge(bName,true); }
-      if (p.email && fEmail && !fEmail.value){ fEmail.value = p.email; showBadge(bEmail,true); }
-      if (p.phone && fPhone && !fPhone.value){ fPhone.value = p.phone; showBadge(bPhone,true); }
-      if (p.address && fAddr && !fAddr.value){ fAddr.value = p.address; showBadge(bAddr,true); }
+    return out;
+  }
 
-      // Scroll to the form start after auto-fill to prompt review
-      const form = document.getElementById('newcall-form');
-      if (form){ form.scrollIntoView({behavior:'smooth', block:'start'}); }
-    }
-  </script>
+  function mergeParsed(a,b){
+    return {
+      company: a.company || b.company,
+      name:    a.name    || b.name,
+      email:   a.email   || b.email,
+      phone:   a.phone   || b.phone,
+      address: a.address || b.address,
+      _hints:  Array.from(new Set([...(a._hints||[]), ...(b._hints||[])]))
+    };
+  }
+
+  function normalisePhone(s){
+    const digits = s.replace(/[^\d+]/g,'');
+    const m = digits.match(/^\+?1?(\d{10})$/);
+    if (m){ return `(${m[1].slice(0,3)}) ${m[1].slice(3,6)}-${m[1].slice(6)}`; }
+    return s.trim();
+  }
+  function cleanCompany(s){
+    return s.replace(/\s{2,}/g,' ').replace(/\s+[|·\-–]\s+.*$/, '').trim();
+  }
+  function titleCase(w){
+    return w.replace(/\b([a-z])/g, m=>m.toUpperCase()).replace(/\bOf\b/g,'of').replace(/\bAnd\b/g,'and');
+  }
+
+  function fillFields(p){
+    if (p.company && fCompany && !fCompany.value){ fCompany.value = p.company; showBadge(bCompany,true); }
+    if (p.name && fName && !fName.value){ fName.value = p.name; showBadge(bName,true); }
+    if (p.email && fEmail && !fEmail.value){ fEmail.value = p.email; showBadge(bEmail,true); }
+    if (p.phone && fPhone && !fPhone.value){ fPhone.value = p.phone; showBadge(bPhone,true); }
+    if (p.address && fAddr && !fAddr.value){ fAddr.value = p.address; showBadge(bAddr,true); }
+
+    const form = document.getElementById('newcall-form');
+    if (form){ form.scrollIntoView({behavior:'smooth', block:'start'}); }
+  }
+</script>
 </body>
 </html>
