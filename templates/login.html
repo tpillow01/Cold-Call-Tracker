@@ -1,71 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Login - Cold Call Tracker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <meta name="theme-color" content="#cc0000">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
+  <meta name="theme-color" content="#cc0000" />
   <style>
-    .auth-container {
-      max-width: 400px;
-      margin: 60px auto;
-      background: #1a1a1a;
-      padding: 30px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px #cc0000;
-      text-align: center;
+    .auth-container{
+      max-width:420px;margin:60px auto;background:#1a1a1a;padding:28px;border-radius:12px;
+      box-shadow:0 0 10px rgba(204,0,0,.6);text-align:center
+    }
+    .auth-container h2{color:#ff6666;margin:0 0 18px}
+    .logo-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    .logo-row img{height:54px;width:auto;object-fit:contain}
+
+    .field{display:flex;flex-direction:column;gap:6px;text-align:left;margin-bottom:14px}
+    .field label{color:#c9c9c9;font-size:.92rem}
+    .auth-input{
+      width:100%;padding:12px 14px;background:#2a2a2a;border:1px solid #444;color:#fff;border-radius:8px;font-size:16px
+    }
+    .auth-input:focus{outline:2px solid #cc0000;outline-offset:2px;border-color:#cc0000}
+
+    .auth-btn{
+      width:100%;background:#cc0000;color:#fff;border:0;padding:12px 14px;font-size:18px;border-radius:8px;
+      cursor:pointer;margin-top:6px
+    }
+    .auth-btn:hover{background:#a00000}
+
+    .links{margin-top:12px;display:grid;gap:6px}
+    .links a{color:#ff6666;font-size:14px;text-decoration:none}
+    .links a:hover{color:#fff}
+
+    .alert{
+      background:#4a1010;border:1px solid #7a1b1b;color:#ffe1e1;padding:10px 12px;border-radius:8px;
+      text-align:left;margin:0 0 12px
     }
 
-    .auth-container h2 {
-      color: #ff6666;
-      margin-bottom: 20px;
-    }
-
-    .auth-container input {
-      width: 100%;
-      padding: 12px;
-      margin-bottom: 16px;
-      background: #2a2a2a;
-      border: 1px solid #444;
-      color: white;
-      border-radius: 6px;
-      font-size: 16px;
-    }
-
-    .auth-container button {
-      width: 100%;
-      background-color: #cc0000;
-      color: white;
-      border: none;
-      padding: 12px;
-      font-size: 18px;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
-    .auth-container button:hover {
-      background-color: #a00000;
-    }
-
-    .auth-container a {
-      color: #ff6666;
-      font-size: 14px;
-      display: block;
-      margin-top: 10px;
-      text-decoration: none;
-    }
-
-    .logo-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 20px;
-    }
-
-    .logo-row img {
-      height: 60px;
+    @media (max-width:520px){
+      .auth-container{margin:36px 12px;padding:22px}
+      .logo-row img{height:44px}
     }
   </style>
 </head>
@@ -73,23 +48,39 @@
   <div class="auth-container">
     <div class="logo-row">
       <img src="{{ url_for('static', filename='tynan_logo.png') }}" alt="Tynan Logo">
-      <img src="{{ url_for('static', filename='heli_logo.png') }}" alt="Heli Logo">
+      <img src="{{ url_for('static', filename='heli_logo.png') }}" alt="HELI Logo">
     </div>
-    <h2>Login</h2>
-    <form method="POST">
-      <input type="text" name="username" placeholder="Username" required>
-      <input type="password" name="password" placeholder="Password" required>
-      <button type="submit">Login</button>
+
+    <h2>Sales Rep Login</h2>
+
+    {% if error %}
+      <div class="alert" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" novalidate>
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" class="auth-input" type="text" name="username" placeholder="Username" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" class="auth-input" type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+      </div>
+      <button class="auth-btn" type="submit">Login</button>
     </form>
-    <a href="/signup">Don’t have an account? Sign up</a>
+
+    <div class="links">
+      <a href="/signup">Don’t have an account? Sign up</a>
+      <a href="/admin/login">Are you an admin? Sign in here</a>
+    </div>
   </div>
 
   <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/static/sw.js')
-      .then(reg => console.log('✅ Service Worker Registered'))
-      .catch(err => console.error('❌ Service Worker Error:', err));
-  }
-</script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(() => console.log('✅ Service Worker Registered'))
+        .catch(err => console.error('❌ Service Worker Error:', err));
+    }
+  </script>
 </body>
 </html>
