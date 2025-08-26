@@ -2,11 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Admin · All Cold Calls</title>
+  <title>Admin · Calls & Metrics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta name="theme-color" content="#cc0000" />
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
-  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
 </head>
 <body>
   <!-- Header -->
@@ -14,52 +13,114 @@
     <div class="topbar-inner">
       <div class="brand-wrap">
         <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
-        <div class="brand-title">Admin · Cold Call Tracker</div>
+        <div class="brand-title">Admin · Productivity Dashboard</div>
         <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
       </div>
       <nav class="topnav">
         <a href="/">Dashboard</a>
         <a href="/schedule">Schedule</a>
-        {% if is_admin %}
-          <a href="/admin"><strong>Admin</strong></a>
-        {% endif %}
-        <a href="/logout">Logout</a>
+        <a href="/admin"><strong>Admin</strong></a>
+        <a href="/admin/logout">Logout</a>
       </nav>
     </div>
   </header>
 
   <div class="shell">
-    <!-- Sidebar -->
+    <!-- Minimal sidebar for admin -->
     <aside class="sidebar">
       <div class="sb-title">ADMIN</div>
       <div class="sb-nav">
-        <a class="sb-btn active" href="/admin">All Cold Calls</a>
+        <a class="sb-btn active" href="/admin">Calls & Metrics</a>
         <a class="sb-btn" href="/">Back to Dashboard</a>
+        <a class="sb-btn" href="/admin/logout">Sign out</a>
       </div>
       <hr class="mt-12 mb-8">
-      <div class="subtle">Signed in as <strong>{{ current_user }}</strong> (admin)</div>
+      <div class="subtle">Signed in as <strong>{{ current_user }}</strong></div>
     </aside>
 
-    <!-- Main -->
+    <!-- Main admin content -->
     <main>
+      <!-- KPI cards -->
       <section class="panel">
-        <h2 class="section-title">All Cold Calls</h2>
-
-        <!-- Search toolbar -->
-        <form method="GET" class="toolbar" role="search" style="margin-top:8px">
-          <input class="input" type="search" name="q" value="{{ q or '' }}"
-                 placeholder="Search company, rep, contact, email, phone, address, notes…" />
-          <button class="btn" type="submit">Search</button>
-          {% if q %}
-            <a class="btn ghost" href="/admin">Clear</a>
-          {% endif %}
-          <div class="right subtle">
-            {% if rows %}{{ rows|length }} result{{ rows|length == 1 and '' or 's' }}{% endif %}
+        <h2 class="section-title">Key Metrics</h2>
+        <div class="reminders">
+          <div class="rem-card">
+            <h3>Total Calls</h3>
+            <div class="k" style="font-size:1.4rem;font-weight:900">{{ total_calls }}</div>
           </div>
-        </form>
+          <div class="rem-card">
+            <h3>Last 7 Days</h3>
+            <div class="k" style="font-size:1.4rem;font-weight:900">{{ last7_calls }}</div>
+          </div>
+          <div class="rem-card">
+            <h3>This Month</h3>
+            <div class="k" style="font-size:1.4rem;font-weight:900">{{ this_month_calls }}</div>
+          </div>
+          <div class="rem-card">
+            <h3>Avg per Active Rep</h3>
+            <div class="k" style="font-size:1.4rem;font-weight:900">
+              {{ "%.1f"|format(avg_calls_per_active_rep) }}
+            </div>
+          </div>
+        </div>
+      </section>
 
-        <!-- Results table -->
-        <div class="table-wrap mt-12">
+      <!-- Leaderboard by rep -->
+      <section class="panel mt-16">
+        <h2 class="section-title">Calls by Rep (lifetime)</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Rep</th>
+                <th>Username</th>
+                <th>Total Calls</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in reps_stats %}
+              <tr>
+                <td data-label="Rep">{{ r['rep_name'] or '—' }}</td>
+                <td data-label="Username">{{ r['rep_username'] or '—' }}</td>
+                <td data-label="Total Calls"><strong>{{ r['cnt'] }}</strong></td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3">No data yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Daily totals (last ~14 days) -->
+      <section class="panel mt-16">
+        <h2 class="section-title">Daily Totals (Last 14 Days)</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Calls</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in daily_14 %}
+              <tr>
+                <td data-label="Date">{{ r['d'] }}</td>
+                <td data-label="Calls"><strong>{{ r['c'] }}</strong></td>
+              </tr>
+              {% else %}
+              <tr><td colspan="2">No recent activity.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- All calls across all reps (read-only) -->
+      <section class="panel mt-16">
+        <h2 class="section-title">All Calls (Read-only)</h2>
+        <div class="table-wrap">
           <table>
             <thead>
               <tr>
@@ -86,7 +147,7 @@
                 <td data-label="Notes" style="white-space:pre-wrap">{{ r['notes'] or '—' }}</td>
               </tr>
               {% else %}
-              <tr><td colspan="8">No results{% if q %} for “{{ q }}”{% endif %}.</td></tr>
+              <tr><td colspan="8">No calls recorded yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>

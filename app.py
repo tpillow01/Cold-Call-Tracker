@@ -12,20 +12,13 @@ app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
 # ── Persistent DB path (Render Disk) ─────────────────────────────────────────────
-# Prefer an explicit DB_PATH=/your/mount/calls.db. If not set, build one from DATA_DIR.
-DISK_DIR = os.environ.get("DATA_DIR")  # e.g., /var/data  (set this to your Disk mount path)
-DB_PATH = os.environ.get("DB_PATH")    # e.g., /var/data/calls.db
-
+DISK_DIR = os.environ.get("DATA_DIR")     # e.g. /var/data
+DB_PATH  = os.environ.get("DB_PATH")      # e.g. /var/data/calls.db
 if not DB_PATH:
-    if DISK_DIR:
-        DB_PATH = os.path.join(DISK_DIR, "calls.db")
-    else:
-        # Fallback: project folder (ephemeral). Use only if you don't have a Disk yet.
-        DB_PATH = os.path.join(os.getcwd(), "calls.db")
-
+    DB_PATH = os.path.join(DISK_DIR, "calls.db") if DISK_DIR else os.path.join(os.getcwd(), "calls.db")
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
-# One-time migration: copy any legacy DB into the new persistent path
+# One-time migration from legacy locations
 LEGACY_CANDIDATES = [
     os.path.join(os.getcwd(), "calls.db"),
     "/opt/render/project/src/calls.db",
@@ -41,8 +34,7 @@ if not os.path.exists(DB_PATH):
                 print(f"⚠️ Migration failed from {cand}: {e}")
 
 print(f"SQLite path in use: {DB_PATH}")
-
-DB = DB_PATH  # keep using DB everywhere below
+DB = DB_PATH
 
 # ─── DB HELPERS ─────────────────────────
 def get_db_connection():
@@ -62,8 +54,8 @@ def _ensure_is_admin_column(conn):
 
 def _ensure_seed_admin(conn):
     """
-    Seeds or updates an admin user from env:
-      ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_NAME (optional)
+    Seed or update an admin user from env vars:
+      ADMIN_USERNAME, ADMIN_PASSWORD (required), ADMIN_NAME (optional).
     """
     admin_user = (os.getenv("ADMIN_USERNAME") or "").strip()
     admin_pass = (os.getenv("ADMIN_PASSWORD") or "").strip()
@@ -121,26 +113,25 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
-    # Admin column + seed admin
     _ensure_is_admin_column(conn)
     _ensure_seed_admin(conn)
-
     conn.commit()
     conn.close()
 
-# Ensure tables exist even when imported by gunicorn
 with app.app_context():
     try:
         init_db()
     except Exception as e:
         print("init_db note:", e)
 
-# Make is_admin available in templates
+# Make "is_admin" (admin session) available to templates
 @app.context_processor
 def inject_globals():
-    return dict(is_admin=bool(session.get('is_admin')), current_user=session.get('name'))
+    # Admin session is totally separate from rep user session
+    current = session.get('admin_name') or session.get('name')
+    return dict(is_admin=bool(session.get('admin_id')), current_user=current)
 
-# ─── AUTH ───────────────────────────────
+# ─── USER AUTH (sales reps) ─────────────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -153,9 +144,9 @@ def login():
         ).fetchone()
         conn.close()
         if user and check_password_hash(user['password'], password):
+            # Rep login keys
             session['user_id'] = user['id']
             session['name'] = user['name']
-            session['is_admin'] = bool(user['is_admin'])
             return redirect('/')
         return render_template('login.html', error='Invalid credentials')
     return render_template('login.html')
@@ -171,7 +162,6 @@ def signup():
         hashed = generate_password_hash(password)
         conn = get_db_connection()
         try:
-            # regular users only
             conn.execute('INSERT INTO users (username, password, name, is_admin) VALUES (?, ?, ?, 0)', (username, hashed, name))
             conn.commit()
             return redirect('/login')
@@ -183,10 +173,11 @@ def signup():
 
 @app.route('/logout')
 def logout():
+    # Rep logout: clears all session (this also logs out admin if using same browser)
     session.clear()
     return redirect('/login')
 
-# ─── DASHBOARD ──────────────────────────
+# ─── DASHBOARD (reps) ───────────────────────────────────────────────────────────
 @app.route('/')
 def index():
     if 'user_id' not in session:
@@ -195,7 +186,7 @@ def index():
     user_id = session['user_id']
     conn = get_db_connection()
     raw_calls = conn.execute(
-        'SELECT * FROM cold_calls WHERE rep_id = ? ORDER BY date_called DESC',
+        'SELECT * FROM cold_calls WHERE rep_id = ? ORDER BY date_called DESC, id DESC',
         (user_id,)
     ).fetchall()
     conn.close()
@@ -229,7 +220,7 @@ def index():
         reminders=reminders
     )
 
-# ─── CALLS CRUD ─────────────────────────
+# ─── CALLS CRUD (reps) ─────────────────────────────────────────────────────────
 @app.route('/add', methods=['POST'])
 def add_call():
     if 'user_id' not in session:
@@ -287,7 +278,7 @@ def delete_call(id):
     conn.close()
     return redirect('/')
 
-# ─── SCHEDULE (view + legacy POST) ───────
+# ─── SCHEDULE (reps) ───────────────────────────────────────────────────────────
 @app.route('/schedule', methods=['GET', 'POST'])
 def schedule():
     if 'user_id' not in session:
@@ -301,7 +292,6 @@ def schedule():
         year = today.year
         month = today.month
 
-    # Legacy: accept POST to /schedule
     if request.method == 'POST':
         title = (request.form.get('title') or '').strip()
         description = (request.form.get('description') or '').strip()
@@ -335,7 +325,6 @@ def schedule():
     ''', (user_id, first_day.isoformat(), last_day.isoformat())).fetchall()
     conn.close()
 
-    # Shape for JS: { "YYYY-MM-DD": [ {title,time,notes,type,id} ] }
     event_map = {}
     for e in rows:
         iso = e['date']
@@ -347,7 +336,6 @@ def schedule():
             'type': e['type'],
         })
 
-    # basic suggestions
     keywords = {"demo": 0, "visit": 0, "call": 0}
     for e in rows:
         t = (e['title'] or '').lower()
@@ -370,7 +358,6 @@ def schedule():
         suggestions=suggestions
     )
 
-# POST from the Add Event modal
 @app.route('/add_event', methods=['POST'])
 def add_event():
     if 'user_id' not in session:
@@ -379,7 +366,7 @@ def add_event():
     user_id = session['user_id']
     title = (request.form.get('title') or '').strip()
     description = (request.form.get('notes') or request.form.get('description') or '').strip()
-    date_val = (request.form.get('date') or '').strip()  # yyyy-mm-dd
+    date_val = (request.form.get('date') or '').strip()
     time_val = (request.form.get('time') or '').strip()
     event_type = (request.form.get('type') or 'call').strip()
 
@@ -441,45 +428,98 @@ def delete_event(id):
     conn.close()
     return redirect('/schedule')
 
-# ─── ADMIN GUARD + VIEW ─────────────────────────────────────────────────────────
+# ─── ADMIN (separate login; read-only dashboard) ─────────────────────────────────
 def admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if not session.get('is_admin'):
-            return redirect('/')
+        if not session.get('admin_id'):
+            return redirect('/admin/login')
         return f(*args, **kwargs)
     return wrapper
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        password = (request.form.get('password') or '').strip()
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT id, username, password, name FROM users WHERE username=? AND COALESCE(is_admin,0)=1",
+            (username,)
+        ).fetchone()
+        conn.close()
+        if row and check_password_hash(row['password'], password):
+            # Keep rep session keys intact; set separate admin keys
+            session['admin_id'] = row['id']
+            session['admin_name'] = row['name']
+            return redirect('/admin')
+        return render_template('admin_login.html', error='Invalid admin credentials')
+    return render_template('admin_login.html')
+
+@app.route('/admin/logout')
+def admin_logout():
+    for k in ('admin_id', 'admin_name'):
+        session.pop(k, None)
+    return redirect('/admin/login')
 
 @app.route('/admin')
 @admin_required
 def admin_home():
-    q = (request.args.get('q') or '').strip()
-    params, where = [], "1=1"
-    if q:
-        like = f"%{q}%"
-        where += """ AND (
-            cc.company LIKE ? OR cc.contact_name LIKE ? OR cc.email LIKE ? OR
-            cc.phone LIKE ? OR cc.address LIKE ? OR cc.notes LIKE ? OR
-            u.name LIKE ? OR u.username LIKE ?
-        )"""
-        params.extend([like]*8)
-
     conn = get_db_connection()
-    rows = conn.execute(f'''
+
+    # KPIs
+    total_calls = conn.execute("SELECT COUNT(*) FROM cold_calls").fetchone()[0]
+    last7_calls = conn.execute("SELECT COUNT(*) FROM cold_calls WHERE date_called >= date('now','-7 day')").fetchone()[0]
+    this_month_calls = conn.execute("""
+        SELECT COUNT(*) FROM cold_calls
+        WHERE strftime('%Y-%m', date_called) = strftime('%Y-%m', 'now')
+    """).fetchone()[0]
+
+    reps_stats = conn.execute("""
+        SELECT COALESCE(u.name, u.username, '(unknown)') AS rep_name,
+               COALESCE(u.username,'')                   AS rep_username,
+               COUNT(*)                                  AS cnt
+        FROM cold_calls cc
+        LEFT JOIN users u ON u.id = cc.rep_id
+        GROUP BY u.id, u.name, u.username
+        ORDER BY cnt DESC
+    """).fetchall()
+    active_reps = sum(1 for r in reps_stats if r['cnt'] > 0)
+    avg_calls_per_active_rep = (total_calls / active_reps) if active_reps else 0
+
+    daily_14 = conn.execute("""
+        SELECT date_called AS d, COUNT(*) AS c
+        FROM cold_calls
+        WHERE date_called >= date('now','-13 day')
+        GROUP BY date_called
+        ORDER BY d ASC
+    """).fetchall()
+
+    # All calls across all reps (read-only)
+    rows = conn.execute("""
         SELECT cc.*,
-               COALESCE(u.name, '')     AS rep_name,
-               COALESCE(u.username, '') AS rep_username
-          FROM cold_calls cc
-          LEFT JOIN users u ON u.id = cc.rep_id
-         WHERE {where}
-         ORDER BY
-           CASE WHEN cc.date_called GLOB '[0-9][0-9][0-9][0-9]-*' THEN 0 ELSE 1 END,
-           cc.date_called DESC,
-           cc.id DESC
-    ''', params).fetchall()
+               COALESCE(u.name, u.username, '') AS rep_name,
+               COALESCE(u.username,'')          AS rep_username
+        FROM cold_calls cc
+        LEFT JOIN users u ON u.id = cc.rep_id
+        ORDER BY
+          CASE WHEN cc.date_called GLOB '[0-9][0-9][0-9][0-9]-*' THEN 0 ELSE 1 END,
+          cc.date_called DESC,
+          cc.id DESC
+    """).fetchall()
+
     conn.close()
 
-    return render_template('admin.html', rows=rows, q=q)
+    return render_template(
+        'admin.html',
+        total_calls=total_calls,
+        last7_calls=last7_calls,
+        this_month_calls=this_month_calls,
+        reps_stats=reps_stats,
+        avg_calls_per_active_rep=avg_calls_per_active_rep,
+        daily_14=daily_14,
+        rows=rows
+    )
 
 # ─── DEV ENTRY ───────────────────────────
 if __name__ == '__main__':

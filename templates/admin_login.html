@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-wrap">
+        <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
+        <div class="brand-title">Admin Login</div>
+        <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
+      </div>
+      <nav class="topnav">
+        <a href="/">User Dashboard</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="shell">
+    <main>
+      <section class="panel">
+        <h2 class="section-title">Sign in as Admin</h2>
+        {% if error %}
+          <div class="rem-card red" role="alert" style="margin-bottom:12px">{{ error }}</div>
+        {% endif %}
+        <form method="POST" class="toolbar" style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px">
+          <input class="input" type="text" name="username" placeholder="Admin username" required />
+          <input class="input" type="password" name="password" placeholder="Password" required />
+          <button class="btn primary" type="submit">Log in</button>
+        </form>
+        <p class="subtle mt-12">Tip: set <code>ADMIN_USERNAME</code> and <code>ADMIN_PASSWORD</code> in Render.</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
+
