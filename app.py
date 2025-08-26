@@ -466,11 +466,16 @@ def admin_home():
 
     conn = get_db_connection()
     rows = conn.execute(f'''
-        SELECT cc.*, u.name AS rep_name, u.username AS rep_username
+        SELECT cc.*,
+               COALESCE(u.name, '')     AS rep_name,
+               COALESCE(u.username, '') AS rep_username
           FROM cold_calls cc
-          JOIN users u ON u.id = cc.rep_id
+          LEFT JOIN users u ON u.id = cc.rep_id
          WHERE {where}
-         ORDER BY cc.date_called DESC, cc.id DESC
+         ORDER BY
+           CASE WHEN cc.date_called GLOB '[0-9][0-9][0-9][0-9]-*' THEN 0 ELSE 1 END,
+           cc.date_called DESC,
+           cc.id DESC
     ''', params).fetchall()
     conn.close()
 

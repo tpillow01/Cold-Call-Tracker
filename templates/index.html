@@ -40,10 +40,12 @@
         <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
       </div>
       <nav class="topnav">
-        <a href="/">Dashboard</a>
-        <a href="/schedule">Schedule</a>
-        <a href="/logout">Logout</a>
-      </nav>
+      <a href="/">Dashboard</a>
+      <a href="/schedule">Schedule</a>
+      {% if is_admin %}<a href="/admin">Admin</a>{% endif %}
+      <a href="/logout">Logout</a>
+</nav>
+
     </div>
   </header>
 
@@ -55,6 +57,7 @@
         <a class="sb-btn active" href="/">Dashboard</a>
         <button class="sb-btn" type="button" onclick="openModal()">📞 Log New Call</button>
         <a class="sb-btn" href="/schedule">📅 Schedule</a>
+          {% if is_admin %}<a class="sb-btn" href="/admin">👑 Admin</a>{% endif %}
         <a class="sb-btn" href="/logout">Logout</a>
       </div>
       <div class="sb-legend">
