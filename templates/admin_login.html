@@ -2,40 +2,84 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Admin Login</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Login · Cold Call Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <meta name="theme-color" content="#cc0000" />
+  <style>
+    .auth-container{
+      max-width:420px;margin:60px auto;background:#1a1a1a;padding:28px;border-radius:12px;
+      box-shadow:0 0 10px rgba(204,0,0,.6);text-align:center
+    }
+    .logo-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    .logo-row img{height:54px;width:auto;object-fit:contain}
+    h2{color:#ff6666;margin:0 0 18px}
+
+    .field{display:flex;flex-direction:column;gap:6px;text-align:left;margin-bottom:14px}
+    .field label{color:#c9c9c9;font-size:.92rem}
+    .auth-input{
+      width:100%;padding:12px 14px;background:#2a2a2a;border:1px solid #444;color:#fff;border-radius:8px;font-size:16px
+    }
+    .auth-input:focus{outline:2px solid #cc0000;outline-offset:2px;border-color:#cc0000}
+
+    .auth-btn{
+      width:100%;background:#cc0000;color:#fff;border:0;padding:12px 14px;font-size:18px;border-radius:8px;
+      cursor:pointer;margin-top:6px
+    }
+    .auth-btn:hover{background:#a00000}
+
+    .links{margin-top:12px;display:grid;gap:6px}
+    .links a{color:#ff6666;font-size:14px;text-decoration:none}
+    .links a:hover{color:#fff}
+
+    .alert{
+      background:#4a1010;border:1px solid #7a1b1b;color:#ffe1e1;padding:10px 12px;border-radius:8px;
+      text-align:left;margin:0 0 12px
+    }
+
+    @media (max-width:520px){
+      .auth-container{margin:36px 12px;padding:22px}
+      .logo-row img{height:44px}
+    }
+  </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand-wrap">
-        <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
-        <div class="brand-title">Admin Login</div>
-        <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
-      </div>
-      <nav class="topnav">
-        <a href="/">User Dashboard</a>
-      </nav>
+  <div class="auth-container">
+    <div class="logo-row">
+      <img src="{{ url_for('static', filename='tynan_logo.png') }}" alt="Tynan Logo">
+      <img src="{{ url_for('static', filename='heli_logo.png') }}" alt="HELI Logo">
     </div>
-  </header>
 
-  <div class="shell">
-    <main>
-      <section class="panel">
-        <h2 class="section-title">Sign in as Admin</h2>
-        {% if error %}
-          <div class="rem-card red" role="alert" style="margin-bottom:12px">{{ error }}</div>
-        {% endif %}
-        <form method="POST" class="toolbar" style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px">
-          <input class="input" type="text" name="username" placeholder="Admin username" required />
-          <input class="input" type="password" name="password" placeholder="Password" required />
-          <button class="btn primary" type="submit">Log in</button>
-        </form>
-        <p class="subtle mt-12">Tip: set <code>ADMIN_USERNAME</code> and <code>ADMIN_PASSWORD</code> in Render.</p>
-      </section>
-    </main>
+    <h2>Admin Login</h2>
+
+    {% if error %}
+      <div class="alert" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" novalidate>
+      <div class="field">
+        <label for="username">Admin Username</label>
+        <input id="username" class="auth-input" type="text" name="username"
+               placeholder="Admin username" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" class="auth-input" type="password" name="password"
+               placeholder="Password" autocomplete="current-password" required>
+      </div>
+      <button class="auth-btn" type="submit">Log in</button>
+    </form>
+
+    <div class="links">
+      <a href="/login">Back to user login</a>
+    </div>
   </div>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/sw.js')
+        .catch(()=>{});
+    }
+  </script>
 </body>
 </html>
-
