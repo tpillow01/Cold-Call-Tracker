@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin · All Cold Calls</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="theme-color" content="#cc0000" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-wrap">
+        <img src="{{ url_for('static', filename='tynan_logo.png') }}" class="logo-img" alt="Tynan" />
+        <div class="brand-title">Admin · Cold Call Tracker</div>
+        <img src="{{ url_for('static', filename='heli_logo.png') }}" class="logo-img" alt="HELI" />
+      </div>
+      <nav class="topnav">
+        <a href="/">Dashboard</a>
+        <a href="/schedule">Schedule</a>
+        {% if is_admin %}
+          <a href="/admin"><strong>Admin</strong></a>
+        {% endif %}
+        <a href="/logout">Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="shell">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sb-title">ADMIN</div>
+      <div class="sb-nav">
+        <a class="sb-btn active" href="/admin">All Cold Calls</a>
+        <a class="sb-btn" href="/">Back to Dashboard</a>
+      </div>
+      <hr class="mt-12 mb-8">
+      <div class="subtle">Signed in as <strong>{{ current_user }}</strong> (admin)</div>
+    </aside>
+
+    <!-- Main -->
+    <main>
+      <section class="panel">
+        <h2 class="section-title">All Cold Calls</h2>
+
+        <!-- Search toolbar -->
+        <form method="GET" class="toolbar" role="search" style="margin-top:8px">
+          <input class="input" type="search" name="q" value="{{ q or '' }}"
+                 placeholder="Search company, rep, contact, email, phone, address, notes…" />
+          <button class="btn" type="submit">Search</button>
+          {% if q %}
+            <a class="btn ghost" href="/admin">Clear</a>
+          {% endif %}
+          <div class="right subtle">
+            {% if rows %}{{ rows|length }} result{{ rows|length == 1 and '' or 's' }}{% endif %}
+          </div>
+        </form>
+
+        <!-- Results table -->
+        <div class="table-wrap mt-12">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Company</th>
+                <th>Contact</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Address</th>
+                <th>Rep</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                <td data-label="Date">{{ r['date_called'] or '—' }}</td>
+                <td data-label="Company"><strong>{{ r['company'] or '—' }}</strong></td>
+                <td data-label="Contact">{{ r['contact_name'] or '—' }}</td>
+                <td data-label="Email">{{ r['email'] or '—' }}</td>
+                <td data-label="Phone">{{ r['phone'] or '—' }}</td>
+                <td data-label="Address">{{ r['address'] or '—' }}</td>
+                <td data-label="Rep">{{ r['rep_name'] or r['rep_username'] or '—' }}</td>
+                <td data-label="Notes" style="white-space:pre-wrap">{{ r['notes'] or '—' }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="8">No results{% if q %} for “{{ q }}”{% endif %}.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

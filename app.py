@@ -1,8 +1,9 @@
-import os
+import os, shutil
 import sqlite3
 from datetime import datetime, timedelta, date as py_date
 from calendar import monthrange
 from collections import defaultdict
+from functools import wraps
 
 from flask import Flask, render_template, request, redirect, session
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,16 +11,78 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-# Use a persistent DB path if provided (Render Disk)
-DB = os.getenv("DB_PATH", os.path.join(os.getcwd(), "calls.db"))
-if os.path.dirname(DB):
-    os.makedirs(os.path.dirname(DB), exist_ok=True)
+# ── Persistent DB path (Render Disk) ─────────────────────────────────────────────
+# Prefer an explicit DB_PATH=/your/mount/calls.db. If not set, build one from DATA_DIR.
+DISK_DIR = os.environ.get("DATA_DIR")  # e.g., /var/data  (set this to your Disk mount path)
+DB_PATH = os.environ.get("DB_PATH")    # e.g., /var/data/calls.db
+
+if not DB_PATH:
+    if DISK_DIR:
+        DB_PATH = os.path.join(DISK_DIR, "calls.db")
+    else:
+        # Fallback: project folder (ephemeral). Use only if you don't have a Disk yet.
+        DB_PATH = os.path.join(os.getcwd(), "calls.db")
+
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+# One-time migration: copy any legacy DB into the new persistent path
+LEGACY_CANDIDATES = [
+    os.path.join(os.getcwd(), "calls.db"),
+    "/opt/render/project/src/calls.db",
+]
+if not os.path.exists(DB_PATH):
+    for cand in LEGACY_CANDIDATES:
+        if os.path.exists(cand):
+            try:
+                shutil.copy2(cand, DB_PATH)
+                print(f"✅ Migrated legacy DB {cand} -> {DB_PATH}")
+                break
+            except Exception as e:
+                print(f"⚠️ Migration failed from {cand}: {e}")
+
+print(f"SQLite path in use: {DB_PATH}")
+
+DB = DB_PATH  # keep using DB everywhere below
 
 # ─── DB HELPERS ─────────────────────────
 def get_db_connection():
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
     return conn
+
+# ─── Admin migration + seeding ──────────────────────────────────────────────────
+def _users_has_is_admin(conn):
+    cols = conn.execute("PRAGMA table_info(users)").fetchall()
+    return any(c["name"] == "is_admin" for c in cols)
+
+def _ensure_is_admin_column(conn):
+    if not _users_has_is_admin(conn):
+        conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+
+def _ensure_seed_admin(conn):
+    """
+    Seeds or updates an admin user from env:
+      ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_NAME (optional)
+    """
+    admin_user = (os.getenv("ADMIN_USERNAME") or "").strip()
+    admin_pass = (os.getenv("ADMIN_PASSWORD") or "").strip()
+    admin_name = (os.getenv("ADMIN_NAME") or "Admin").strip()
+    if not (admin_user and admin_pass):
+        return
+    row = conn.execute("SELECT id FROM users WHERE username = ?", (admin_user,)).fetchone()
+    hashed = generate_password_hash(admin_pass)
+    if row:
+        conn.execute(
+            "UPDATE users SET password = ?, name = ?, is_admin = 1 WHERE id = ?",
+            (hashed, admin_name, row["id"])
+        )
+    else:
+        conn.execute(
+            "INSERT INTO users (username, password, name, is_admin) VALUES (?, ?, ?, 1)",
+            (admin_user, hashed, admin_name)
+        )
+    conn.commit()
 
 def init_db():
     conn = get_db_connection()
@@ -29,6 +92,7 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             name TEXT NOT NULL
+            -- is_admin added via migration below
         )
     ''')
     conn.execute('''
@@ -57,6 +121,10 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
+    # Admin column + seed admin
+    _ensure_is_admin_column(conn)
+    _ensure_seed_admin(conn)
+
     conn.commit()
     conn.close()
 
@@ -67,6 +135,11 @@ with app.app_context():
     except Exception as e:
         print("init_db note:", e)
 
+# Make is_admin available in templates
+@app.context_processor
+def inject_globals():
+    return dict(is_admin=bool(session.get('is_admin')), current_user=session.get('name'))
+
 # ─── AUTH ───────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -74,11 +147,15 @@ def login():
         username = (request.form.get('username') or '').strip()
         password = (request.form.get('password') or '').strip()
         conn = get_db_connection()
-        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        user = conn.execute(
+            'SELECT id, username, password, name, COALESCE(is_admin,0) AS is_admin FROM users WHERE username = ?',
+            (username,)
+        ).fetchone()
         conn.close()
         if user and check_password_hash(user['password'], password):
             session['user_id'] = user['id']
             session['name'] = user['name']
+            session['is_admin'] = bool(user['is_admin'])
             return redirect('/')
         return render_template('login.html', error='Invalid credentials')
     return render_template('login.html')
@@ -94,7 +171,8 @@ def signup():
         hashed = generate_password_hash(password)
         conn = get_db_connection()
         try:
-            conn.execute('INSERT INTO users (username, password, name) VALUES (?, ?, ?)', (username, hashed, name))
+            # regular users only
+            conn.execute('INSERT INTO users (username, password, name, is_admin) VALUES (?, ?, ?, 0)', (username, hashed, name))
             conn.commit()
             return redirect('/login')
         except sqlite3.IntegrityError:
@@ -127,7 +205,13 @@ def index():
     today = py_date.today()
 
     for call in raw_calls:
-        call_date = datetime.strptime(call['date_called'], '%Y-%m-%d').date()
+        try:
+            call_date = datetime.strptime(call['date_called'], '%Y-%m-%d').date()
+        except Exception:
+            try:
+                call_date = datetime.fromisoformat(call['date_called']).date()
+            except Exception:
+                call_date = today
         month_key = call_date.strftime('%B %Y')
         calls_by_month[month_key].append(call)
 
@@ -356,6 +440,41 @@ def delete_event(id):
     conn.commit()
     conn.close()
     return redirect('/schedule')
+
+# ─── ADMIN GUARD + VIEW ─────────────────────────────────────────────────────────
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('is_admin'):
+            return redirect('/')
+        return f(*args, **kwargs)
+    return wrapper
+
+@app.route('/admin')
+@admin_required
+def admin_home():
+    q = (request.args.get('q') or '').strip()
+    params, where = [], "1=1"
+    if q:
+        like = f"%{q}%"
+        where += """ AND (
+            cc.company LIKE ? OR cc.contact_name LIKE ? OR cc.email LIKE ? OR
+            cc.phone LIKE ? OR cc.address LIKE ? OR cc.notes LIKE ? OR
+            u.name LIKE ? OR u.username LIKE ?
+        )"""
+        params.extend([like]*8)
+
+    conn = get_db_connection()
+    rows = conn.execute(f'''
+        SELECT cc.*, u.name AS rep_name, u.username AS rep_username
+          FROM cold_calls cc
+          JOIN users u ON u.id = cc.rep_id
+         WHERE {where}
+         ORDER BY cc.date_called DESC, cc.id DESC
+    ''', params).fetchall()
+    conn.close()
+
+    return render_template('admin.html', rows=rows, q=q)
 
 # ─── DEV ENTRY ───────────────────────────
 if __name__ == '__main__':
